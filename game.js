@@ -802,76 +802,254 @@
 
   const audio = {
     ctx: null,
-    music: null,
-    gain: null,
+    master: null,
+    musicGain: null,
+    sfxGain: null,
+    beatTimer: 0,
     started: false,
+    scene: 'menu',
+    intensity: 0.35,
+    beat: 0,
+    lastCoinAt: 0,
     init() {
       if (this.ctx) return;
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
       this.ctx = new AudioContext();
-      this.gain = this.ctx.createGain();
-      this.gain.gain.value = 0.035;
-      this.gain.connect(this.ctx.destination);
+
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.82;
+
+      this.musicGain = this.ctx.createGain();
+      this.musicGain.gain.value = 0.0001;
+
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.value = 0.82;
+
+      this.musicGain.connect(this.master);
+      this.sfxGain.connect(this.master);
+      this.master.connect(this.ctx.destination);
     },
     unlock() {
       this.init();
       if (!this.ctx) return;
       if (this.ctx.state === 'suspended') this.ctx.resume();
-      if (!this.started && data.settings.music) this.startMusic();
       this.started = true;
+      if (data.settings.music) this.startMusic(this.scene || 'menu');
     },
-    tone(freq, duration = 0.08, type = 'sine', volume = 0.08) {
+    createEnvGain(destination, peak = 0.05, attack = 0.01, duration = 0.18, release = 0.06) {
+      const gain = this.ctx.createGain();
+      const t = this.ctx.currentTime;
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + attack);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(attack + 0.02, duration + release));
+      gain.connect(destination);
+      return gain;
+    },
+    tone(freq, duration = 0.08, type = 'sine', volume = 0.08, destination = null) {
+      if (!destination && !data.settings.sfx) return null;
+      this.init();
+      if (!this.ctx) return null;
+      const osc = this.ctx.createOscillator();
+      const gain = this.createEnvGain(destination || this.sfxGain, volume, 0.006, duration, 0.04);
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+      osc.connect(gain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + duration + 0.08);
+      return osc;
+    },
+    noise(duration = 0.18, volume = 0.04, filterFreq = 900, type = 'bandpass') {
       if (!data.settings.sfx) return;
       this.init();
       if (!this.ctx) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = type;
-      osc.frequency.value = freq;
-      gain.gain.value = volume;
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
-      osc.start();
-      osc.stop(this.ctx.currentTime + duration);
+      const sampleRate = this.ctx.sampleRate;
+      const buffer = this.ctx.createBuffer(1, Math.max(1, Math.floor(sampleRate * duration)), sampleRate);
+      const dataArray = buffer.getChannelData(0);
+      for (let i = 0; i < dataArray.length; i += 1) dataArray[i] = (Math.random() * 2 - 1) * (1 - i / dataArray.length);
+      const source = this.ctx.createBufferSource();
+      const filter = this.ctx.createBiquadFilter();
+      const gain = this.createEnvGain(this.sfxGain, volume, 0.004, duration, 0.02);
+      filter.type = type;
+      filter.frequency.value = filterFreq;
+      filter.Q.value = 1.1;
+      source.buffer = buffer;
+      source.connect(filter);
+      filter.connect(gain);
+      source.start();
     },
-    click() { this.tone(520, 0.05, 'triangle', 0.045); },
-    coin() { this.tone(920, 0.08, 'sine', 0.065); setTimeout(() => this.tone(1180, 0.06, 'sine', 0.045), 45); },
-    score() { this.tone(660, 0.05, 'square', 0.035); },
-    skill() { this.tone(260, 0.10, 'sawtooth', 0.06); setTimeout(() => this.tone(620, 0.12, 'sawtooth', 0.045), 75); },
-    hit() { this.tone(90, 0.18, 'sawtooth', 0.09); },
-    over() { this.tone(180, 0.16, 'triangle', 0.08); setTimeout(() => this.tone(120, 0.22, 'triangle', 0.07), 120); },
-    startMusic() {
+    chord(freqs, duration = 0.55, type = 'triangle', volume = 0.018) {
+      if (!data.settings.music || !this.ctx) return;
+      freqs.forEach((freq, index) => {
+        const osc = this.ctx.createOscillator();
+        const gain = this.createEnvGain(this.musicGain, volume / Math.max(1, freqs.length), 0.04 + index * 0.004, duration, 0.22);
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        osc.connect(gain);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration + 0.3);
+      });
+    },
+    click() {
+      this.tone(560, 0.045, 'triangle', 0.04);
+      setTimeout(() => this.tone(760, 0.035, 'sine', 0.025), 35);
+    },
+    coin() {
+      const now = performance.now();
+      if (now - this.lastCoinAt < 38) return;
+      this.lastCoinAt = now;
+      this.tone(960, 0.075, 'sine', 0.06);
+      setTimeout(() => this.tone(1280, 0.06, 'triangle', 0.042), 42);
+    },
+    score() {
+      this.tone(680, 0.05, 'square', 0.032);
+      setTimeout(() => this.tone(820, 0.045, 'triangle', 0.022), 40);
+    },
+    skill() {
+      this.tone(220, 0.10, 'sawtooth', 0.055);
+      this.tone(440, 0.16, 'sawtooth', 0.040);
+      setTimeout(() => this.tone(760, 0.12, 'triangle', 0.045), 70);
+      this.noise(0.16, 0.026, 1600, 'highpass');
+    },
+    boostStart() {
+      this.skill();
+      this.tone(130, 0.22, 'sawtooth', 0.055);
+      this.noise(0.28, 0.038, 2100, 'highpass');
+      this.setIntensity(1);
+    },
+    boostEnd() {
+      this.tone(240, 0.09, 'triangle', 0.032);
+      this.noise(0.11, 0.02, 850, 'lowpass');
+    },
+    hit() {
+      this.tone(82, 0.20, 'sawtooth', 0.085);
+      this.tone(148, 0.16, 'square', 0.045);
+      this.noise(0.22, 0.05, 520, 'lowpass');
+    },
+    shieldBreak() {
+      this.tone(360, 0.13, 'triangle', 0.055);
+      setTimeout(() => this.tone(220, 0.12, 'triangle', 0.035), 70);
+      this.noise(0.12, 0.035, 1400, 'bandpass');
+    },
+    over() {
+      this.setScene('gameover');
+      this.tone(220, 0.16, 'triangle', 0.08);
+      setTimeout(() => this.tone(165, 0.22, 'triangle', 0.065), 120);
+      setTimeout(() => this.tone(110, 0.28, 'sine', 0.055), 260);
+    },
+    levelClear() {
+      this.tone(660, 0.12, 'triangle', 0.06);
+      setTimeout(() => this.tone(880, 0.12, 'triangle', 0.055), 110);
+      setTimeout(() => this.tone(1320, 0.18, 'sine', 0.05), 230);
+    },
+    setScene(scene = 'menu') {
+      if (this.scene !== scene && this.beatTimer) {
+        clearInterval(this.beatTimer);
+        this.beatTimer = 0;
+      }
+      this.scene = scene;
+      if (data.settings.music && this.started) this.startMusic(scene);
+    },
+    setIntensity(value = 0.35) {
+      this.intensity = clamp(value, 0, 1);
+      if (!this.ctx || !this.musicGain || !data.settings.music) return;
+      const base = this.scene === 'game' ? 0.030 : this.scene === 'arena' ? 0.038 : this.scene === 'level' ? 0.034 : this.scene === 'gameover' ? 0.020 : 0.022;
+      const target = base + this.intensity * (this.scene === 'menu' ? 0.006 : 0.020);
+      this.musicGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.12);
+    },
+    bpm() {
+      if (this.scene === 'arena') return 142;
+      if (this.scene === 'level') return 124;
+      if (this.scene === 'game') return 132;
+      if (this.scene === 'gameover') return 78;
+      return 92;
+    },
+    rootForScene() {
+      if (this.scene === 'arena') return 110;
+      if (this.scene === 'level') return 98;
+      if (this.scene === 'gameover') return 82.41;
+      if (this.scene === 'game') return 103.83;
+      return 87.31;
+    },
+    musicStep() {
+      if (!this.ctx || !data.settings.music) return;
+      const root = this.rootForScene();
+      const beatLen = 60 / this.bpm();
+      const step = this.beat % 16;
+      const boost = game && game.active && game.active.speedBoost > 0;
+      const intensity = clamp(this.intensity + (boost ? 0.35 : 0), 0, 1);
+      const rootGain = this.scene === 'menu' ? 0.008 : 0.012 + intensity * 0.008;
+
+      if (step % 8 === 0) {
+        const modeShift = this.scene === 'arena' ? 1.122 : this.scene === 'level' ? 1.189 : 1.26;
+        this.chord([root, root * modeShift, root * 1.5, root * 2.0], beatLen * 5.5, 'triangle', this.scene === 'gameover' ? 0.012 : 0.020);
+      }
+
+      if (this.scene !== 'menu' || step % 4 === 0) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.createEnvGain(this.musicGain, rootGain, 0.012, beatLen * 0.42, 0.04);
+        osc.type = this.scene === 'arena' ? 'sawtooth' : 'triangle';
+        osc.frequency.setValueAtTime(step % 4 === 0 ? root / 2 : root / 2 * 1.5, this.ctx.currentTime);
+        osc.connect(gain);
+        osc.start();
+        osc.stop(this.ctx.currentTime + beatLen * 0.55);
+      }
+
+      if (this.scene !== 'gameover' && (this.scene !== 'menu' || step % 2 === 0)) {
+        const arp = this.scene === 'arena'
+          ? [2, 3, 5, 7, 8, 7, 5, 3]
+          : this.scene === 'level'
+            ? [2, 4, 5, 7, 9, 7, 5, 4]
+            : [2, 3, 5, 6, 8, 6, 5, 3];
+        const note = root * (arp[step % arp.length] / 2);
+        const osc = this.ctx.createOscillator();
+        const filter = this.ctx.createBiquadFilter();
+        const gain = this.createEnvGain(this.musicGain, 0.006 + intensity * 0.010, 0.006, beatLen * 0.30, 0.03);
+        osc.type = 'triangle';
+        filter.type = 'lowpass';
+        filter.frequency.value = 1200 + intensity * 2600;
+        filter.Q.value = 0.9;
+        osc.frequency.setValueAtTime(note, this.ctx.currentTime);
+        osc.connect(filter);
+        filter.connect(gain);
+        osc.start();
+        osc.stop(this.ctx.currentTime + beatLen * 0.42);
+      }
+
+      if ((this.scene === 'arena' || boost) && step % 2 === 1) {
+        this.noise(0.045, 0.009 + intensity * 0.012, 4500, 'highpass');
+      }
+
+      this.beat += 1;
+    },
+    startMusic(scene = this.scene || 'menu') {
       this.init();
-      if (!this.ctx || this.music) return;
-      const osc = this.ctx.createOscillator();
-      const lfo = this.ctx.createOscillator();
-      const lfoGain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = 112;
-      lfo.frequency.value = 0.18;
-      lfoGain.gain.value = 16;
-      lfo.connect(lfoGain);
-      lfoGain.connect(osc.frequency);
-      osc.connect(this.gain);
-      osc.start();
-      lfo.start();
-      this.music = { osc, lfo };
+      if (!this.ctx || !data.settings.music) return;
+      this.scene = scene;
+      if (!this.beatTimer) {
+        this.beat = 0;
+        this.beatTimer = setInterval(() => this.musicStep(), Math.max(110, (60 / this.bpm()) * 1000 / 2));
+      }
+      this.setIntensity(this.scene === 'menu' ? 0.22 : 0.45);
     },
     stopMusic() {
-      if (!this.music) return;
-      try {
-        this.music.osc.stop();
-        this.music.lfo.stop();
-      } catch (error) {}
-      this.music = null;
+      if (this.beatTimer) {
+        clearInterval(this.beatTimer);
+        this.beatTimer = 0;
+      }
+      if (this.musicGain && this.ctx) this.musicGain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.12);
     },
     syncMusic() {
-      if (data.settings.music) this.startMusic();
-      else this.stopMusic();
+      if (data.settings.music) {
+        this.started = true;
+        this.startMusic(this.scene || (currentScreen === 'gameScreen' ? 'game' : 'menu'));
+      } else {
+        this.stopMusic();
+      }
     }
   };
+
 
   function showScreen(id) {
     if (!dom.screens.some((screen) => screen.id === id)) id = 'startScreen';
@@ -879,6 +1057,8 @@
     if (id !== 'gameScreen') {
       setMobileItemsOpen(false);
       hideOnboardingToast(false);
+      audio.setScene('menu');
+      audio.setIntensity(0.22);
     }
     dom.screens.forEach((screen) => screen.classList.toggle('active', screen.id === id));
     if (id === 'shopScreen') renderShop();
@@ -1271,6 +1451,9 @@
       const rules = modeRules(game.mode);
       game.baseSpeed = isGuestMode() ? 285 : Math.round(315 * rules.speedMul);
 
+      audio.setScene(game.mode === 'arena' ? 'arena' : game.mode === 'level' ? 'level' : 'game');
+      audio.setIntensity(0.48);
+
       game.resetRuntime();
       game.running = true;
       game.paused = false;
@@ -1314,6 +1497,8 @@
       game.mode = 'classic';
       game.level = 1;
       game.baseSpeed = 285;
+      audio.setScene('game');
+      audio.setIntensity(0.46);
       game.resetRuntime();
       game.running = true;
       game.paused = false;
@@ -1421,7 +1606,8 @@
 
   function endGame(reason = 'crash') {
     if (game.over) return;
-    audio.over();
+    if (reason === 'levelClear') audio.levelClear();
+    else audio.over();
     game.running = false;
     game.over = true;
     game.paused = false;
@@ -1717,6 +1903,7 @@
     const boostMul = game.speedFx || 1;
     game.speed = (game.baseSpeed + game.score * (game.mode === 'arena' ? 0.055 : game.mode === 'level' ? 0.034 : 0.045)) * boostMul;
     game.distance += game.speed * dt;
+    audio.setIntensity(clamp(0.34 + (game.speed / 850) * 0.28 + (game.score / 12000) * 0.18 + (boostMul - 1) * 0.55, 0.25, 1));
 
     const scoreGain = (70 + diff * 18) * dt * boostMul * rules.scoreMul;
     game.score += scoreGain;
@@ -1791,10 +1978,12 @@
     if (boostActive && !game.boostActiveLast) {
       game.boostPulse = 1;
       game.shake = Math.max(game.shake, 3.5);
+      audio.boostStart();
     }
     if (!boostActive && game.boostActiveLast) {
       game.brakePulse = 1;
       game.shake = Math.max(game.shake, 4.5);
+      audio.boostEnd();
       if (game.player) addParticles(game.player.x, game.player.y + game.player.r * 0.85, 18, '#38e8ff', 150);
     }
     game.boostActiveLast = boostActive;
@@ -2063,7 +2252,7 @@
       obstacle.dead = true;
       game.invincibleTimer = 0.55;
       game.shake = 8;
-      audio.hit();
+      audio.shieldBreak();
       addFloatingText(game.player.x, game.player.y - 30, 'Shield block!', '#38e8ff');
       addParticles(obstacle.x, obstacle.y, 24, '#38e8ff', 210);
       if (game.shieldHits <= 0) game.active.shield = 0;
@@ -2313,8 +2502,12 @@
         return `<div class="shop-card bundle-card ${bundle.badge === 'Best Value' ? 'featured' : ''}">
           <div class="deal-badge">${bundle.badge}</div>
           <h3>${bundle.name}</h3>
-          <p>${bundle.desc}<br><span class="price">${bundle.price}</span><br>${formatNumber(bundle.coins)} Coins · ${itemLine}<br><small>${skin ? `Includes ${skin.name} ship` : 'Bonus ship included'} · Mock payment placeholder.</small></p>
-          <button class="buy-btn" data-buy-bundle="${bundle.id}">${owned ? 'Buy Again' : 'Buy Bundle'}</button>
+          <p>${bundle.desc}<br><span class="price">${bundle.price}</span><br>${formatNumber(bundle.coins)} Coins · ${itemLine}<br><small>${skin ? `Includes ${skin.name} ship` : 'Bonus ship included'} · Secure checkout: Card / Apple Pay / Google Pay.</small></p>
+          <div class="pay-method-row">
+            <button class="buy-btn" data-buy-bundle="${bundle.id}" data-pay-type="8004">${owned ? 'Buy Again' : 'Card'}</button>
+            <button class="glass-btn pay-mini-btn" data-buy-bundle="${bundle.id}" data-pay-type="8003">Apple</button>
+            <button class="glass-btn pay-mini-btn" data-buy-bundle="${bundle.id}" data-pay-type="8012">Google</button>
+          </div>
         </div>`;
       }).join('')}</div>`;
     }
@@ -2323,8 +2516,12 @@
       dom.shopContent.innerHTML = `<div class="card-grid">${COIN_PACKS.map((pack) => `
         <div class="shop-card">
           <h3>${pack.name}</h3>
-          <p><span class="price">${pack.price}</span><br>${formatNumber(pack.coins)} Coins<br><small>Mock payment placeholder. No backend required.</small></p>
-          <button class="buy-btn" data-buy-pack="${pack.id}">Buy</button>
+          <p><span class="price">${pack.price}</span><br>${formatNumber(pack.coins)} Coins<br><small>Secure checkout: Credit Card / Apple Pay / Google Pay.</small></p>
+          <div class="pay-method-row">
+            <button class="buy-btn" data-buy-pack="${pack.id}" data-pay-type="8004">Card</button>
+            <button class="glass-btn pay-mini-btn" data-buy-pack="${pack.id}" data-pay-type="8003">Apple</button>
+            <button class="glass-btn pay-mini-btn" data-buy-pack="${pack.id}" data-pay-type="8012">Google</button>
+          </div>
         </div>`).join('')}</div>`;
     }
 
@@ -3641,30 +3838,268 @@
     animationId = requestAnimationFrame(loop);
   }
 
-  function buyBundle(id) {
-    if (!requireLogin('Starter bundles')) return;
-    const bundle = BUNDLES.find((b) => b.id === id);
-    if (!bundle) return;
-    audio.click();
-    data.coins += bundle.coins;
-    addItemsToWallet(bundle.items);
-    if (bundle.skin && !data.ownedSkins.includes(bundle.skin)) data.ownedSkins.push(bundle.skin);
-    if (bundle.skin) data.equippedSkin = bundle.skin;
-    if (!data.purchasedBundles.includes(bundle.id)) data.purchasedBundles.push(bundle.id);
-    saveData();
-    renderShop();
-    updateHUD();
-    window.alert(`${bundle.name} added to your wallet. Payment is a front-end placeholder for this demo.`);
+
+  const PAYMENT_PAY_TYPES = {
+    card: 8004,
+    apple: 8003,
+    google: 8012
+  };
+
+  const PAYMENT_SCRIPT_URLS = [
+    'https://www.roomilo.com/js/core/PayApi-v2.js',
+    'https://www.roomilo.com/js/core/crypto-js.min.js'
+  ];
+
+  function parseUsdPrice(price) {
+    const value = Number(String(price || '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(value) ? Number(value.toFixed(2)) : 0;
   }
 
-  function buyCoinPack(id) {
-    if (!requireLogin('Coin packs')) return;
+  function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(String(value || '').trim());
+  }
+
+  function getStoredCheckoutEmail() {
+    return String(data.checkoutEmail || data.email || '').trim();
+  }
+
+  function askCheckoutEmail() {
+    if (hasActiveAccount() && accounts[currentUserId]) {
+      const accountEmail = accounts[currentUserId].email || accounts[currentUserId].displayName || '';
+      if (isValidEmail(accountEmail)) return accountEmail.trim();
+    }
+
+    const saved = getStoredCheckoutEmail();
+    if (isValidEmail(saved)) return saved;
+
+    const input = window.prompt('Enter your email for checkout:', saved || 'test@qq.com');
+    const email = String(input || '').trim();
+    if (!isValidEmail(email)) {
+      window.alert('Please enter a valid email address before checkout.');
+      return '';
+    }
+
+    data.checkoutEmail = email;
+    saveData();
+    return email;
+  }
+
+  function splitCustomerName() {
+    const raw = normalizeName(data.playerName || 'Galaxy Pilot');
+    const parts = raw.split(/\s+/).filter(Boolean);
+    return {
+      firstName: (parts[0] || 'Galaxy').slice(0, 32),
+      lastName: (parts.slice(1).join(' ') || 'Pilot').slice(0, 32)
+    };
+  }
+
+  function paymentReturnUrl(status, orderId) {
+    const base = `${window.location.origin}${window.location.pathname}`;
+    const params = new URLSearchParams();
+    params.set('payment', status);
+    if (orderId) params.set('orderId', orderId);
+    return `${base}?${params.toString()}`;
+  }
+
+  function getPendingPayments() {
+    return readJSON('galaxyRunPendingPayments', {});
+  }
+
+  function savePendingPayment(orderId, payload) {
+    const pending = getPendingPayments();
+    pending[orderId] = Object.assign({}, payload, { createdAt: new Date().toISOString() });
+    writeJSON('galaxyRunPendingPayments', pending);
+  }
+
+  function removePendingPayment(orderId) {
+    const pending = getPendingPayments();
+    delete pending[orderId];
+    writeJSON('galaxyRunPendingPayments', pending);
+  }
+
+  function loadPaymentScript(url) {
+    return new Promise((resolve, reject) => {
+      const existing = Array.from(document.scripts || []).find((script) => script.src === url);
+      if (existing && existing.dataset.loaded === 'true') {
+        resolve();
+        return;
+      }
+      if (existing && !existing.dataset.failed) {
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener('error', () => reject(new Error(`Failed to load ${url}`)), { once: true });
+        setTimeout(() => resolve(), 900);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = url;
+      script.async = false;
+      script.onload = () => {
+        script.dataset.loaded = 'true';
+        resolve();
+      };
+      script.onerror = () => {
+        script.dataset.failed = 'true';
+        reject(new Error(`Failed to load ${url}`));
+      };
+      document.head.appendChild(script);
+    });
+  }
+
+  async function ensurePaymentApiReady() {
+    if (typeof window.DoRequest === 'function' || typeof DoRequest === 'function') return true;
+
+    // Dynamic fallback. This helps if the static script was blocked, cached incorrectly, or loaded late.
+    for (const url of PAYMENT_SCRIPT_URLS) {
+      try {
+        await loadPaymentScript(url);
+      } catch (error) {
+        console.warn(error);
+      }
+    }
+
+    return typeof window.DoRequest === 'function' || typeof DoRequest === 'function';
+  }
+
+  function grantPaidProduct(payload) {
+    if (!payload) return false;
+
+    if (payload.kind === 'coinPack') {
+      const pack = COIN_PACKS.find((item) => item.id === payload.id);
+      if (!pack) return false;
+      data.coins += pack.coins;
+      saveData();
+      renderShop();
+      updateHUD();
+      window.alert(`${pack.name} payment successful. ${formatNumber(pack.coins)} Coins added.`);
+      return true;
+    }
+
+    if (payload.kind === 'bundle') {
+      const bundle = BUNDLES.find((item) => item.id === payload.id);
+      if (!bundle) return false;
+      data.coins += bundle.coins;
+      addItemsToWallet(bundle.items);
+      if (bundle.skin && !data.ownedSkins.includes(bundle.skin)) data.ownedSkins.push(bundle.skin);
+      if (bundle.skin) data.equippedSkin = bundle.skin;
+      if (!data.purchasedBundles.includes(bundle.id)) data.purchasedBundles.push(bundle.id);
+      saveData();
+      renderShop();
+      updateHUD();
+      window.alert(`${bundle.name} payment successful. Bundle rewards added to your wallet.`);
+      return true;
+    }
+
+    return false;
+  }
+
+  function handlePaymentReturn() {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      const status = params.get('payment');
+      const orderId = params.get('orderId');
+      if (!status || !orderId) return;
+
+      const pending = getPendingPayments();
+      const payload = pending[orderId];
+
+      if (status === 'success' && payload) {
+        grantPaidProduct(payload);
+        removePendingPayment(orderId);
+      } else if (status === 'failed') {
+        window.alert('Payment was not completed. Your coins were not changed.');
+        if (payload) removePendingPayment(orderId);
+      }
+
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`);
+      }
+    } catch (error) {
+      console.warn('Payment return handling skipped:', error);
+    }
+  }
+
+  function buildPaymentOptions(product, kind, payType = PAYMENT_PAY_TYPES.card) {
+    // Keep orderId simple: letters + numbers only. Some payment gateways reject special chars.
+    const orderId = `A${Date.now()}${Math.floor(Math.random() * 9000 + 1000)}`;
+    const amount = parseUsdPrice(product.price);
+    const customer = splitCustomerName();
+    const name = product.name || 'Galaxy Run Rivals Product';
+    const email = askCheckoutEmail();
+
+    if (!email) return null;
+
+    return {
+      orderId: orderId,
+      amount: amount,
+      currency: 'USD',
+      payTypes: Number(payType) || PAYMENT_PAY_TYPES.card,
+      name: name,
+      email: email,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      phone: '135',
+      successUrl: paymentReturnUrl('success', orderId),
+      backUrl: paymentReturnUrl('failed', orderId),
+      _localPayload: {
+        orderId: orderId,
+        kind: kind,
+        id: product.id,
+        amount: amount,
+        currency: 'USD',
+        name: name,
+        payType: Number(payType) || PAYMENT_PAY_TYPES.card
+      }
+    };
+  }
+
+  async function requestPayment(product, kind, payType = PAYMENT_PAY_TYPES.card) {
+    audio.click();
+
+    const options = buildPaymentOptions(product, kind, payType);
+    if (!options) return false;
+
+    if (!options.amount || options.amount <= 0) {
+      window.alert('Invalid payment amount.');
+      return false;
+    }
+
+    const localPayload = options._localPayload;
+    savePendingPayment(options.orderId, localPayload);
+    delete options._localPayload;
+
+    const ready = await ensurePaymentApiReady();
+    if (!ready) {
+      console.error('[Galaxy Run Rivals] DoRequest is not available. Check PayApi-v2.js and crypto-js.min.js script loading.');
+      window.alert('Payment script is not loaded. Please refresh the page and try again.');
+      return false;
+    }
+
+    try {
+      console.log('[Galaxy Run Rivals] Calling DoRequest with options:', options);
+      if (typeof DoRequest === 'function') {
+        DoRequest(options);
+      } else {
+        window.DoRequest(options);
+      }
+      return true;
+    } catch (error) {
+      console.error('[Galaxy Run Rivals] Payment request failed:', error);
+      window.alert('Payment request failed. Please try again later.');
+      return false;
+    }
+  }
+
+  function buyBundle(id, payType = PAYMENT_PAY_TYPES.card) {
+    const bundle = BUNDLES.find((b) => b.id === id);
+    if (!bundle) return;
+    requestPayment(bundle, 'bundle', Number(payType) || PAYMENT_PAY_TYPES.card);
+  }
+
+  function buyCoinPack(id, payType = PAYMENT_PAY_TYPES.card) {
     const pack = COIN_PACKS.find((p) => p.id === id);
     if (!pack) return;
-    audio.click();
-    data.coins += pack.coins;
-    saveData();
-    renderShop();
+    requestPayment(pack, 'coinPack', Number(payType) || PAYMENT_PAY_TYPES.card);
   }
 
   function buyUpgrade(key) {
@@ -3845,9 +4280,9 @@
         renderLevelSelect();
       }
       const bundleBtn = event.target.closest('[data-buy-bundle]');
-      if (bundleBtn) buyBundle(bundleBtn.dataset.buyBundle);
+      if (bundleBtn) buyBundle(bundleBtn.dataset.buyBundle, bundleBtn.dataset.payType || PAYMENT_PAY_TYPES.card);
       const packBtn = event.target.closest('[data-buy-pack]');
-      if (packBtn) buyCoinPack(packBtn.dataset.buyPack);
+      if (packBtn) buyCoinPack(packBtn.dataset.buyPack, packBtn.dataset.payType || PAYMENT_PAY_TYPES.card);
       const itemBtn = event.target.closest('[data-buy-item]');
       if (itemBtn) buyItem(itemBtn.dataset.buyItem);
       const upgradeBtn = event.target.closest('[data-buy-upgrade]');
@@ -3973,6 +4408,7 @@
       }
       data = hydrateData(data);
       syncLoadedDataToUI();
+      handlePaymentReturn();
       game.resetRuntime();
       setAuthMessage('', false);
       showScreen('startScreen');
@@ -3986,6 +4422,7 @@
         resizeCanvas();
         setupEvents();
         syncLoadedDataToUI();
+        handlePaymentReturn();
         game.resetRuntime();
         showScreen('startScreen');
         animationId = requestAnimationFrame(loop);

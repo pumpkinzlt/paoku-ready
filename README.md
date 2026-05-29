@@ -400,3 +400,46 @@ This version adds a dedicated mobile polish pass without changing the core game 
 - The game canvas still blocks page gestures during gameplay, but Start / Shop / Settings / Leaderboard pages can scroll normally.
 - Added visible tap/click feedback to buttons, including pressed state, glow, and ripple effect.
 - Improved touch behavior so mobile taps feel responsive without breaking Start / Restart / Shop logic.
+
+
+## Dynamic Music and Audio FX Upgrade
+
+- Replaced the simple single-note background tone with a procedural sci-fi music system using Web Audio.
+- Added different music scenes for Menu, Classic, Arena, Level, and Game Over.
+- Music intensity now changes with speed, score, and Boost state.
+- Added stronger Boost start/end sounds, richer coin/score/click tones, crash noise, and level-clear fanfare.
+- Music and SFX still respect the existing Settings toggles and require a user interaction before playback, as browsers require.
+
+
+## Payment API Integration
+
+This version references the required payment scripts:
+
+- https://www.roomilo.com/js/core/crypto-js.min.js
+- https://www.roomilo.com/js/core/PayApi-v2.js
+
+Shop coin packs and starter bundles now call `DoRequest(options)`.
+
+Supported payTypes:
+- 8004 = Credit Card
+- 8003 = Apple Pay
+- 8012 = Google Pay
+
+The game stores a pending order in localStorage before redirecting to payment. On return to `?payment=success&orderId=...`, the matching local pending product is granted to the account. If `DoRequest` is unavailable, the game displays: "Payment service is not available. Please try again later."
+
+
+## Payment API Integration V2
+
+Payment fixes:
+- References both required scripts:
+  - https://www.roomilo.com/js/core/PayApi-v2.js
+  - https://www.roomilo.com/js/core/crypto-js.min.js
+- Adds a dynamic fallback loader if the static scripts are not ready.
+- Calls `DoRequest(options)` directly when available.
+- Uses simple alphanumeric order IDs like `A1712345678901234`.
+- Supports payTypes:
+  - 8004 = Credit Card
+  - 8003 = Apple Pay
+  - 8012 = Google Pay
+- Allows checkout from guest mode by asking for an email address.
+- Logs the final `options` object in the browser console before calling `DoRequest`.

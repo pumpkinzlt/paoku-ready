@@ -2991,3 +2991,28 @@ button.tap-active {
 .tap-ripple {
   z-index: 0;
 }
+
+
+/* Payment Method Buttons */
+.pay-method-row {
+  display: grid;
+  grid-template-columns: 1.25fr 0.9fr 0.9fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pay-mini-btn {
+  min-height: 42px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 420px) {
+  .pay-method-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pay-mini-btn {
+    min-height: 46px;
+  }
+}
