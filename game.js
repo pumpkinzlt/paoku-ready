@@ -230,6 +230,13 @@
     onboardingClose: $('#onboardingClose'),
     shopCoins: $('#shopCoins'),
     shopContent: $('#shopContent'),
+    paymentCheckoutOverlay: $('#paymentCheckoutOverlay'),
+    checkoutProductName: $('#checkoutProductName'),
+    checkoutProductDesc: $('#checkoutProductDesc'),
+    checkoutAmount: $('#checkoutAmount'),
+    checkoutEmail: $('#checkoutEmail'),
+    checkoutStatus: $('#checkoutStatus'),
+    checkoutCancelBtn: $('#checkoutCancelBtn'),
     leaderboardList: $('#leaderboardList'),
     musicToggle: $('#musicToggle'),
     sfxToggle: $('#sfxToggle'),
@@ -255,6 +262,7 @@
   let modeStartAt = 0;
   let directStartTouchAt = 0;
   let directStartAt = 0;
+  let selectedCheckout = null;
 
   const GALAXY_SECTORS = [
     {
@@ -879,6 +887,7 @@
     if (id !== 'gameScreen') {
       setMobileItemsOpen(false);
       hideOnboardingToast(false);
+      if (id !== 'shopScreen') closeCheckout();
     }
     dom.screens.forEach((screen) => screen.classList.toggle('active', screen.id === id));
     if (id === 'shopScreen') renderShop();
@@ -2313,7 +2322,7 @@
         return `<div class="shop-card bundle-card ${bundle.badge === 'Best Value' ? 'featured' : ''}">
           <div class="deal-badge">${bundle.badge}</div>
           <h3>${bundle.name}</h3>
-          <p>${bundle.desc}<br><span class="price">${bundle.price}</span><br>${formatNumber(bundle.coins)} Coins · ${itemLine}<br><small>${skin ? `Includes ${skin.name} ship` : 'Bonus ship included'} · Mock payment placeholder.</small></p>
+          <p>${bundle.desc}<br><span class="price">${bundle.price}</span><br>${formatNumber(bundle.coins)} Coins · ${itemLine}<br><small>${skin ? `Includes ${skin.name} ship` : 'Bonus ship included'} · Recharge checkout available.</small></p>
           <button class="buy-btn" data-buy-bundle="${bundle.id}">${owned ? 'Buy Again' : 'Buy Bundle'}</button>
         </div>`;
       }).join('')}</div>`;
@@ -2323,8 +2332,8 @@
       dom.shopContent.innerHTML = `<div class="card-grid">${COIN_PACKS.map((pack) => `
         <div class="shop-card">
           <h3>${pack.name}</h3>
-          <p><span class="price">${pack.price}</span><br>${formatNumber(pack.coins)} Coins<br><small>Mock payment placeholder. No backend required.</small></p>
-          <button class="buy-btn" data-buy-pack="${pack.id}">Buy</button>
+          <p><span class="price">${pack.price}</span><br>${formatNumber(pack.coins)} Coins<br><small>Recharge with Credit Card, Apple Pay, or Google Pay.</small></p>
+          <button class="buy-btn" data-buy-pack="${pack.id}">Recharge</button>
         </div>`).join('')}</div>`;
     }
 
@@ -3641,30 +3650,322 @@
     animationId = requestAnimationFrame(loop);
   }
 
-  function buyBundle(id) {
-    if (!requireLogin('Starter bundles')) return;
-    const bundle = BUNDLES.find((b) => b.id === id);
-    if (!bundle) return;
+  const PAYMENT_PAY_TYPES = {
+    card: 8004,
+    apple: 8003,
+    google: 8012
+  };
+
+  const PAYMENT_SCRIPT_URLS = [
+    'https://www.roomilo.com/js/core/crypto-js.min.js',
+    'https://www.roomilo.com/js/core/PayApi-v2.js'
+  ];
+
+  function parseUsdPrice(price) {
+    const value = Number(String(price || '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(value) ? Number(value.toFixed(2)) : 0;
+  }
+
+  function isValidCheckoutEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(String(value || '').trim());
+  }
+
+  function getDefaultCheckoutEmail() {
+    if (hasActiveAccount() && accounts[currentUserId]) {
+      const email = accounts[currentUserId].email || accounts[currentUserId].displayName || '';
+      if (isValidCheckoutEmail(email)) return email.trim();
+    }
+    const stored = String(data.checkoutEmail || '').trim();
+    return isValidCheckoutEmail(stored) ? stored : '';
+  }
+
+  function splitCustomerName() {
+    const raw = normalizeName(data.playerName || 'Galaxy Pilot');
+    const parts = raw.split(/\s+/).filter(Boolean);
+    return {
+      firstName: (parts[0] || 'Galaxy').slice(0, 32),
+      lastName: (parts.slice(1).join(' ') || 'Pilot').slice(0, 32)
+    };
+  }
+
+  function paymentReturnUrl(status, orderId) {
+    const href = (window.location && window.location.href ? window.location.href : '').split('#')[0].split('?')[0];
+    const base = /^https?:\/\//i.test(href) ? href : 'https://www.roomilo.com/';
+    const params = new URLSearchParams();
+    params.set('payment', status);
+    if (orderId) params.set('orderId', orderId);
+    return `${base}?${params.toString()}`;
+  }
+
+  function getPendingPayments() {
+    return readJSON('galaxyRunPendingPayments', {});
+  }
+
+  function savePendingPayment(orderId, payload) {
+    const pending = getPendingPayments();
+    pending[orderId] = Object.assign({}, payload, { createdAt: new Date().toISOString() });
+    writeJSON('galaxyRunPendingPayments', pending);
+  }
+
+  function removePendingPayment(orderId) {
+    const pending = getPendingPayments();
+    delete pending[orderId];
+    writeJSON('galaxyRunPendingPayments', pending);
+  }
+
+  function loadPaymentScript(url) {
+    return new Promise((resolve, reject) => {
+      if (typeof window.DoRequest === 'function' || typeof DoRequest === 'function') {
+        resolve();
+        return;
+      }
+
+      const existing = Array.from(document.scripts || []).find((script) => script.src === url);
+      if (existing && existing.dataset.loaded === 'true') {
+        resolve();
+        return;
+      }
+
+      const script = existing || document.createElement('script');
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        script.dataset.loaded = 'true';
+        resolve();
+      };
+      const fail = () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(`Failed to load ${url}`));
+      };
+
+      script.addEventListener('load', done, { once: true });
+      script.addEventListener('error', fail, { once: true });
+
+      if (!existing) {
+        script.src = url;
+        script.async = false;
+        document.head.appendChild(script);
+      }
+
+      // Never let a payment CDN hang forever. Checkout can show a clear error instead.
+      setTimeout(() => {
+        if (!settled) fail();
+      }, 6000);
+    });
+  }
+
+  async function ensurePaymentApiReady() {
+    if (typeof window.DoRequest === 'function' || typeof DoRequest === 'function') return true;
+
+    // Load in required order: crypto-js first, PayApi second.
+    for (const url of PAYMENT_SCRIPT_URLS) {
+      try {
+        await loadPaymentScript(url);
+      } catch (error) {
+        console.warn('[Galaxy Run Rivals] Payment script load warning:', error);
+      }
+    }
+
+    return typeof window.DoRequest === 'function' || typeof DoRequest === 'function';
+  }
+
+  function productForCheckout(kind, id) {
+    if (kind === 'bundle') {
+      const bundle = BUNDLES.find((item) => item.id === id);
+      if (!bundle) return null;
+      const itemLine = Object.entries(bundle.items).map(([key, count]) => `${ITEMS[key].name} x${count}`).join(', ');
+      return {
+        kind: 'bundle',
+        id: bundle.id,
+        product: bundle,
+        name: bundle.name,
+        desc: `${formatNumber(bundle.coins)} Coins + ${itemLine}`,
+        amount: parseUsdPrice(bundle.price)
+      };
+    }
+
+    const pack = COIN_PACKS.find((item) => item.id === id);
+    if (!pack) return null;
+    return {
+      kind: 'coinPack',
+      id: pack.id,
+      product: pack,
+      name: pack.name,
+      desc: `${formatNumber(pack.coins)} Coins`,
+      amount: parseUsdPrice(pack.price)
+    };
+  }
+
+  function openCheckout(kind, id) {
+    const summary = productForCheckout(kind, id);
+    if (!summary) return;
     audio.click();
-    data.coins += bundle.coins;
-    addItemsToWallet(bundle.items);
-    if (bundle.skin && !data.ownedSkins.includes(bundle.skin)) data.ownedSkins.push(bundle.skin);
-    if (bundle.skin) data.equippedSkin = bundle.skin;
-    if (!data.purchasedBundles.includes(bundle.id)) data.purchasedBundles.push(bundle.id);
+
+    selectedCheckout = summary;
+    dom.checkoutProductName.textContent = summary.name;
+    dom.checkoutProductDesc.textContent = summary.desc;
+    dom.checkoutAmount.textContent = `$${summary.amount.toFixed(2)}`;
+    dom.checkoutEmail.value = getDefaultCheckoutEmail();
+    dom.checkoutStatus.textContent = 'Choose Credit Card, Apple Pay, or Google Pay.';
+    dom.paymentCheckoutOverlay.classList.remove('hidden');
+    setTimeout(() => dom.checkoutEmail.focus(), 50);
+  }
+
+  function closeCheckout() {
+    selectedCheckout = null;
+    if (dom.paymentCheckoutOverlay) dom.paymentCheckoutOverlay.classList.add('hidden');
+  }
+
+  function grantPaidProduct(payload) {
+    if (!payload) return false;
+
+    if (payload.kind === 'coinPack') {
+      const pack = COIN_PACKS.find((item) => item.id === payload.id);
+      if (!pack) return false;
+      data.coins += pack.coins;
+      saveData();
+      renderShop();
+      updateHUD();
+      window.alert(`${pack.name} payment successful. ${formatNumber(pack.coins)} Coins added.`);
+      return true;
+    }
+
+    if (payload.kind === 'bundle') {
+      const bundle = BUNDLES.find((item) => item.id === payload.id);
+      if (!bundle) return false;
+      data.coins += bundle.coins;
+      addItemsToWallet(bundle.items);
+      if (bundle.skin && !data.ownedSkins.includes(bundle.skin)) data.ownedSkins.push(bundle.skin);
+      if (bundle.skin) data.equippedSkin = bundle.skin;
+      if (!data.purchasedBundles.includes(bundle.id)) data.purchasedBundles.push(bundle.id);
+      saveData();
+      renderShop();
+      updateHUD();
+      window.alert(`${bundle.name} payment successful. Bundle rewards added to your wallet.`);
+      return true;
+    }
+
+    return false;
+  }
+
+  function handlePaymentReturn() {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      const status = params.get('payment');
+      const orderId = params.get('orderId');
+      if (!status || !orderId) return;
+
+      const pending = getPendingPayments();
+      const payload = pending[orderId];
+
+      if (status === 'success' && payload) {
+        grantPaidProduct(payload);
+        removePendingPayment(orderId);
+      } else if (status === 'failed') {
+        window.alert('Payment was not completed. Your coins were not changed.');
+        if (payload) removePendingPayment(orderId);
+      }
+
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } catch (error) {
+      console.warn('Payment return handling skipped:', error);
+    }
+  }
+
+  function buildPaymentOptions(summary, payType, email) {
+    const orderId = `A${Date.now()}${Math.floor(Math.random() * 9000 + 1000)}`;
+    const customer = splitCustomerName();
+
+    return {
+      orderId: orderId,
+      amount: Number(summary.amount.toFixed(2)),
+      currency: 'USD',
+      payTypes: Number(payType) || PAYMENT_PAY_TYPES.card,
+      name: summary.name,
+      email: email,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      phone: '135',
+      successUrl: paymentReturnUrl('success', orderId),
+      backUrl: paymentReturnUrl('failed', orderId),
+      _localPayload: {
+        orderId: orderId,
+        kind: summary.kind,
+        id: summary.id,
+        amount: Number(summary.amount.toFixed(2)),
+        currency: 'USD',
+        name: summary.name,
+        payType: Number(payType) || PAYMENT_PAY_TYPES.card
+      }
+    };
+  }
+
+  function callPaymentApi(options) {
+    window.__lastGalaxyPayOptions = options;
+    console.log('[Galaxy Run Rivals] Calling DoRequest(options):', options);
+    if (typeof DoRequest === 'function') DoRequest(options);
+    else window.DoRequest(options);
+  }
+
+  async function confirmCheckout(payType = PAYMENT_PAY_TYPES.card) {
+    if (!selectedCheckout) {
+      window.alert('Please select a product first.');
+      return false;
+    }
+
+    const email = String(dom.checkoutEmail.value || '').trim();
+    if (!isValidCheckoutEmail(email)) {
+      dom.checkoutStatus.textContent = 'Please enter a valid checkout email.';
+      dom.checkoutEmail.focus();
+      return false;
+    }
+
+    data.checkoutEmail = email;
     saveData();
-    renderShop();
-    updateHUD();
-    window.alert(`${bundle.name} added to your wallet. Payment is a front-end placeholder for this demo.`);
+
+    const options = buildPaymentOptions(selectedCheckout, payType, email);
+    const localPayload = options._localPayload;
+    savePendingPayment(options.orderId, localPayload);
+    delete options._localPayload;
+
+    dom.checkoutStatus.textContent = 'Opening secure payment...';
+
+    try {
+      if (typeof window.DoRequest === 'function' || typeof DoRequest === 'function') {
+        callPaymentApi(options);
+        dom.checkoutStatus.textContent = 'Payment opened. Complete checkout to receive your rewards.';
+        return true;
+      }
+
+      const ready = await ensurePaymentApiReady();
+      if (!ready) {
+        console.error('[Galaxy Run Rivals] DoRequest is not available. Check crypto-js and PayApi-v2 loading.');
+        dom.checkoutStatus.textContent = 'Payment script is not loaded. Refresh and try again.';
+        window.alert('Payment script is not loaded. Please refresh the page and try again.');
+        return false;
+      }
+
+      callPaymentApi(options);
+      dom.checkoutStatus.textContent = 'Payment opened. Complete checkout to receive your rewards.';
+      return true;
+    } catch (error) {
+      console.error('[Galaxy Run Rivals] DoRequest failed:', error);
+      dom.checkoutStatus.textContent = 'Payment request failed. Please try again.';
+      window.alert('Payment request failed. Please try again later.');
+      return false;
+    }
+  }
+
+  function buyBundle(id) {
+    openCheckout('bundle', id);
   }
 
   function buyCoinPack(id) {
-    if (!requireLogin('Coin packs')) return;
-    const pack = COIN_PACKS.find((p) => p.id === id);
-    if (!pack) return;
-    audio.click();
-    data.coins += pack.coins;
-    saveData();
-    renderShop();
+    openCheckout('coinPack', id);
   }
 
   function buyUpgrade(key) {
@@ -3848,6 +4149,8 @@
       if (bundleBtn) buyBundle(bundleBtn.dataset.buyBundle);
       const packBtn = event.target.closest('[data-buy-pack]');
       if (packBtn) buyCoinPack(packBtn.dataset.buyPack);
+      const checkoutPayBtn = event.target.closest('[data-checkout-pay]');
+      if (checkoutPayBtn) confirmCheckout(Number(checkoutPayBtn.dataset.checkoutPay));
       const itemBtn = event.target.closest('[data-buy-item]');
       if (itemBtn) buyItem(itemBtn.dataset.buyItem);
       const upgradeBtn = event.target.closest('[data-buy-upgrade]');
@@ -3913,6 +4216,12 @@
       audio.click();
     });
     dom.resetDataBtn.addEventListener('click', resetData);
+    if (dom.checkoutCancelBtn) dom.checkoutCancelBtn.addEventListener('click', closeCheckout);
+    if (dom.paymentCheckoutOverlay) {
+      dom.paymentCheckoutOverlay.addEventListener('click', (event) => {
+        if (event.target === dom.paymentCheckoutOverlay) closeCheckout();
+      });
+    }
 
     window.addEventListener('resize', resizeCanvas);
     if (window.visualViewport) window.visualViewport.addEventListener('resize', resizeCanvas);
@@ -3973,6 +4282,7 @@
       }
       data = hydrateData(data);
       syncLoadedDataToUI();
+      handlePaymentReturn();
       game.resetRuntime();
       setAuthMessage('', false);
       showScreen('startScreen');
@@ -3986,6 +4296,7 @@
         resizeCanvas();
         setupEvents();
         syncLoadedDataToUI();
+        handlePaymentReturn();
         game.resetRuntime();
         showScreen('startScreen');
         animationId = requestAnimationFrame(loop);
@@ -4020,5 +4331,15 @@
     }
   };
 
+  window.__GalaxyRunLoaded = true;
+  window.__GalaxyStartHealth = function () {
+    return {
+      loaded: !!window.__GalaxyRunLoaded,
+      activeScreen: document.querySelector('.screen.active')?.id || null,
+      hasStartButton: !!document.querySelector('#startBtn'),
+      hasGameCanvas: !!document.querySelector('#gameCanvas'),
+      hasDoRequest: typeof window.DoRequest === 'function' || typeof DoRequest === 'function'
+    };
+  };
   init();
 })();

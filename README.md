@@ -400,3 +400,36 @@ This version adds a dedicated mobile polish pass without changing the core game 
 - The game canvas still blocks page gestures during gameplay, but Start / Shop / Settings / Leaderboard pages can scroll normally.
 - Added visible tap/click feedback to buttons, including pressed state, glow, and ripple effect.
 - Improved touch behavior so mobile taps feel responsive without breaking Start / Restart / Shop logic.
+
+
+## Non-blocking Payment Recharge Integration
+
+- Based on the stable interaction-scroll-fixed version.
+- `game.js` remains the first script so Start Game is not blocked by payment scripts.
+- Payment scripts are preloaded after `game.js` with `defer` and dynamically loaded again when checkout starts.
+- Dynamic load order: `crypto-js.min.js` first, then `PayApi-v2.js`.
+- Shop flow: choose pack/bundle → Secure Checkout modal → email → Credit Card / Apple Pay / Google Pay.
+- Calls `DoRequest(options)` with `orderId`, `amount`, `currency`, `payTypes`, `name`, `email`, `firstName`, `lastName`, `phone`, `successUrl`, and `backUrl`.
+- Debug: `window.__GalaxyRunLoaded` confirms game boot; `window.__lastGalaxyPayOptions` stores the last payment request.
+
+
+## Dynamic-only Payment Scripts
+
+- Removed static Roomilo payment script tags from `index.html` so Start Game cannot be affected by payment CDN loading.
+- `game.js` is the only script loaded at page boot.
+- Payment scripts are loaded only when checkout is confirmed, in this order:
+  1. `crypto-js.min.js`
+  2. `PayApi-v2.js`
+- Added `window.__GalaxyStartHealth()` for browser console diagnostics.
+
+## Tested build note
+
+This package was tested after the payment scripts were moved to dynamic loading only. The page keeps only `game.js` in `index.html` at startup, so payment scripts do not block Start Game.
+
+Verified flows:
+- Start Game opens the Game Screen.
+- Mobile touchend + click Start path enters the Game Screen.
+- Restart path stays in the Game Screen.
+- Registered user can enter Mode Select and start Arena.
+- Shop coin recharge opens Secure Checkout.
+- Credit Card checkout builds the expected `DoRequest(options)` payload with `payTypes: 8004` and amount `0.99` for Starter Pack.

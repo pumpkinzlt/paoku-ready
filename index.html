@@ -224,6 +224,30 @@
       </div>
     </section>
 
+    <div id="paymentCheckoutOverlay" class="overlay hidden payment-checkout-overlay">
+      <div class="modal payment-modal pop-in">
+        <div class="eyebrow">Secure Checkout</div>
+        <h2>Recharge</h2>
+        <p class="checkout-summary">
+          <strong id="checkoutProductName">Coin Pack</strong>
+          <span id="checkoutProductDesc">Select a pack to continue.</span>
+        </p>
+        <div class="checkout-grid">
+          <div><span>Amount</span><strong id="checkoutAmount">$0.00</strong></div>
+          <div><span>Currency</span><strong>USD</strong></div>
+        </div>
+        <label class="input-label" for="checkoutEmail">Checkout Email</label>
+        <input id="checkoutEmail" class="name-input" type="email" inputmode="email" autocomplete="email" placeholder="test@qq.com" />
+        <p class="checkout-status" id="checkoutStatus">Choose a payment method below.</p>
+        <div class="checkout-pay-row">
+          <button class="primary-btn" data-checkout-pay="8004">Credit Card</button>
+          <button class="glass-btn" data-checkout-pay="8003">Apple Pay</button>
+          <button class="glass-btn" data-checkout-pay="8012">Google Pay</button>
+        </div>
+        <button class="glass-btn full" id="checkoutCancelBtn">Cancel</button>
+      </div>
+    </div>
+
     <section id="leaderboardScreen" class="screen menu-screen">
       <div class="panel pop-in">
         <div class="screen-head">
