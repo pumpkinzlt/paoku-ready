@@ -443,3 +443,18 @@ Payment fixes:
   - 8012 = Google Pay
 - Allows checkout from guest mode by asking for an email address.
 - Logs the final `options` object in the browser console before calling `DoRequest`.
+
+
+## Payment Logic Rework - Snake Style Recharge
+
+- Shop payment now follows the Snake-style recharge flow:
+  1. Select a coin pack or starter bundle.
+  2. A Secure Checkout modal opens.
+  3. Enter checkout email.
+  4. Choose Credit Card / Apple Pay / Google Pay.
+  5. The game calls `DoRequest(options)`.
+- Script order is now `crypto-js.min.js` first, then `PayApi-v2.js`, then `game.js`.
+- The options object matches the requested fields:
+  `orderId`, `amount`, `currency`, `payTypes`, `name`, `email`, `firstName`, `lastName`, `phone`, `successUrl`, `backUrl`.
+- Browser console logs the exact options before calling `DoRequest`.
+- `window.__lastGalaxyPayOptions` stores the last payment options for debugging.
