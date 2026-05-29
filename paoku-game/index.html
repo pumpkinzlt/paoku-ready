@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Galaxy Run Rivals</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <div class="bg-orb orb-a"></div>
+    <div class="bg-orb orb-b"></div>
+    <div class="bg-orb orb-c"></div>
+
+    <section id="authScreen" class="screen menu-screen">
+      <div class="brand-card auth-card pop-in">
+        <div class="eyebrow">Player Account</div>
+        <h1>Galaxy Run Rivals</h1>
+        <p class="subtitle">Sign in as a star pilot and cross unstable galaxy lanes between nebula gates. Your coins, ships, upgrades, levels, and mission logs stay saved on this device.</p>
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-auth-tab="login">Login</button>
+          <button class="auth-tab" data-auth-tab="register">Register</button>
+        </div>
+        <form id="loginForm" class="auth-form">
+          <label class="input-label" for="loginUsername">Email Address</label>
+          <input id="loginUsername" class="name-input" type="email" maxlength="80" autocomplete="email" inputmode="email" placeholder="Enter email address" />
+          <label class="input-label" for="loginPassword">Password</label>
+          <input id="loginPassword" class="name-input" type="password" maxlength="32" autocomplete="current-password" placeholder="Enter password" />
+          <button class="primary-btn full" type="submit">Login</button>
+        </form>
+        <form id="registerForm" class="auth-form hidden">
+          <label class="input-label" for="registerUsername">Email Address</label>
+          <input id="registerUsername" class="name-input" type="email" maxlength="80" autocomplete="email" inputmode="email" placeholder="you@example.com" />
+          <label class="input-label" for="registerPassword">Password</label>
+          <input id="registerPassword" class="name-input" type="password" minlength="6" maxlength="32" autocomplete="new-password" placeholder="At least 6 characters" />
+          <label class="input-label" for="registerConfirmPassword">Confirm Password</label>
+          <input id="registerConfirmPassword" class="name-input" type="password" minlength="6" maxlength="32" autocomplete="new-password" placeholder="Confirm password" />
+          <button class="primary-btn full" type="submit">Create Account</button>
+        </form>
+        <div class="guest-divider"><span>or</span></div>
+        <button class="guest-play-btn" id="guestPlayBtn" type="button">Play Rookie Mode as Guest</button>
+        <div id="authMessage" class="auth-message" role="status"></div>
+        <p class="auth-note">Guest Mode lets you play a beginner run without logging in. Shop, daily rewards, full modes, and official local leaderboard records require a local account.</p>
+        <p class="auth-note">Local demo login only. Register with an email address and a password of at least 6 characters. Account data is saved in this browser with localStorage and is not sent to a server.</p>
+      </div>
+    </section>
+
+    <section id="startScreen" class="screen active menu-screen">
+      <div class="brand-card pop-in">
+        <div class="eyebrow">Deep Space Runner</div>
+        <h1>Galaxy Run Rivals</h1>
+        <p class="subtitle">Pilot through nebula highways, dodge asteroid debris, collect Star Coins, and outrun rival ships across the Orion Rift.</p>
+        <div class="story-card">
+          <span>Mission Brief</span>
+          <strong>The Orion Rift is collapsing.</strong>
+          <small>Jump from star gate to star gate, gather energy cores, and keep your ship alive long enough to reach the next galaxy sector.</small>
+        </div>
+        <div class="account-bar" id="accountBar">
+          <span><span id="accountPrefix">Signed in as</span> <strong id="currentAccountName">Player</strong></span>
+          <button class="tiny-btn" id="logoutBtn">Sign Out</button>
+        </div>
+        <label class="input-label" for="playerNameInput">Pilot Name</label>
+        <input id="playerNameInput" class="name-input" maxlength="18" autocomplete="off" placeholder="Enter your name" />
+        <div class="menu-grid">
+          <button class="primary-btn" id="startBtn" onclick="window.__GRRForceStart && window.__GRRForceStart()">Start Game</button>
+          <button class="glass-btn" id="modeBtn">Mode Select</button>
+          <button class="glass-btn" id="shopBtn">Shop</button>
+          <button class="glass-btn" id="leaderboardBtn">Leaderboard</button>
+          <button class="glass-btn" id="settingsBtn">Settings</button>
+        </div>
+        <div class="daily-card" id="dailyRewardCard">
+          <span>Daily Reward</span>
+          <strong id="dailyRewardText">Ready</strong>
+          <button class="tiny-btn" id="claimDailyBtn">Claim</button>
+        </div>
+        <div class="v2-promo-grid">
+          <div class="v2-promo-card premium">
+            <span>Best Starter Deal</span>
+            <strong>Star Pilot Bundle</strong>
+            <small>Bonus ship + Revive + Shield + 300 Star Coins</small>
+          </div>
+          <div class="v2-promo-card">
+            <span>Next Goal</span>
+            <strong id="nextGoalText">Score 1,500</strong>
+            <small id="nextGoalReward">Reward: 120 Coins + 1 Boost</small>
+          </div>
+        </div>
+        <p class="guest-note hidden" id="guestModeNote">Guest Rookie Mode is available without login. Create an account to unlock Shop, Arena, Level Mode, daily rewards, and official local rankings.</p>
+      </div>
+    </section>
+
+    <section id="modeScreen" class="screen menu-screen">
+      <div class="panel wide pop-in">
+        <div class="screen-head">
+          <div>
+            <div class="eyebrow">Choose Your Route</div>
+            <h2>Galaxy Mission Select</h2>
+          </div>
+          <button class="icon-btn backHomeBtn">⌂</button>
+        </div>
+        <div class="mode-grid">
+          <button class="mode-card selected" data-mode="classic">
+            <span class="mode-icon">🌌</span>
+            <strong>Classic Mode</strong>
+            <small>Endless warp lane through the Orion Rift. Survive and chase your best score.</small>
+          </button>
+          <button class="mode-card" data-mode="arena">
+            <span class="mode-icon">🚀</span>
+            <strong>Arena Mode</strong>
+            <small>Race rival pilots through crowded trade lanes and shifting star gates.</small>
+          </button>
+          <button class="mode-card" data-mode="level">
+            <span class="mode-icon">🪐</span>
+            <strong>Level Mode</strong>
+            <small>Complete sector missions, earn stars, and unlock deeper galaxy routes.</small>
+          </button>
+        </div>
+        <div id="levelSelect" class="level-select hidden"></div>
+        <button class="primary-btn full" id="startSelectedModeBtn" onclick="window.__GRRForceModeStart && window.__GRRForceModeStart()">Start Selected Mode</button>
+      </div>
+    </section>
+
+    <section id="gameScreen" class="screen game-screen">
+      <canvas id="gameCanvas" aria-label="Galaxy Run Rivals game canvas"></canvas>
+
+      <div class="mission-brief-hud" id="sectorHud">
+        <span>Current Sector</span>
+        <strong>Orion Rift</strong>
+        <small>Stabilize the route and collect Star Coins.</small>
+      </div>
+
+      <div class="hud top-left">
+        <div class="stat"><span>Score</span><strong id="scoreHud">0</strong></div>
+        <div class="stat"><span>Best</span><strong id="bestHud">0</strong></div>
+        <div class="stat coin-stat"><span>Coins</span><strong id="coinsHud">0</strong></div>
+      </div>
+
+      <div class="hud top-right">
+        <div class="mode-pill" id="modeHud">Classic</div>
+        <button class="round-btn" id="pauseBtn">Ⅱ</button>
+        <button class="round-btn" id="gameHomeBtn">⌂</button>
+      </div>
+
+      <div class="item-dock" id="itemDock"></div>
+      <button class="mobile-items-toggle" id="mobileItemsToggle" type="button"><span>＋</span><small>MORE</small></button>
+      <div class="mini-board" id="miniLeaderboard"></div>
+
+      <div class="mobile-controls" id="mobileControls">
+        <div class="swipe-hint">Drag to move</div>
+        <button class="skill-btn" id="mobileSkillBtn"><span>⚡</span><small>BOOST</small></button>
+      </div>
+
+      <div class="onboarding-toast hidden" id="onboardingToast">
+        <div class="onboarding-icon" id="onboardingIcon">☝️</div>
+        <div>
+          <strong id="onboardingTitle">Drag to steer</strong>
+          <small id="onboardingText">Move your finger on the screen to dodge hazards.</small>
+        </div>
+        <button id="onboardingClose" type="button">Got it</button>
+      </div>
+
+      <div id="pauseOverlay" class="overlay hidden">
+        <div class="modal pause-modal pop-in">
+          <h2>Paused</h2>
+          <p>Hold position inside the galaxy lane. Your ship is still powered.</p>
+          <button class="primary-btn" id="resumeBtn">Resume</button>
+          <button class="glass-btn" id="restartPauseBtn">Restart</button>
+          <button class="glass-btn" id="homePauseBtn">Home</button>
+        </div>
+      </div>
+
+      <div id="gameOverOverlay" class="overlay hidden">
+        <div class="modal gameover-modal pop-in">
+          <div class="eyebrow">Signal Lost</div>
+          <h2>Ship Down</h2>
+          <div class="result-grid">
+            <div><span>Score</span><strong id="overScore">0</strong></div>
+            <div><span>Best Score</span><strong id="overBest">0</strong></div>
+            <div><span>Coins Earned</span><strong id="overCoins">0</strong></div>
+            <div><span>Stars</span><strong id="overStars">—</strong></div>
+          </div>
+          <div class="continue-card" id="continueCard">
+            <div>
+              <span id="continueTitle">Second Wind Available</span>
+              <strong id="continueDesc">Use 1 Revive or 60 Coins to continue this run.</strong>
+            </div>
+            <button class="primary-btn" id="continueRunBtn">Continue</button>
+          </div>
+          <div class="goal-progress-card" id="overGoalCard">
+            <div class="goal-progress-head">
+              <span id="overGoalLabel">Next Reward</span>
+              <strong id="overGoalGap">Score 1,500</strong>
+            </div>
+            <div class="goal-progress-track"><span id="overGoalFill"></span></div>
+            <small id="overGoalReward">Reward: 120 Coins + 1 Boost</small>
+          </div>
+          <p class="run-tip" id="overTip">Tip: Starter Bundle includes Revive + Shield for longer runs.</p>
+          <div class="gameover-actions">
+            <button class="primary-btn" id="restartBtn">Restart</button>
+            <button class="glass-btn" id="homeBtn">Home</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="shopScreen" class="screen menu-screen">
+      <div class="panel shop-panel pop-in">
+        <div class="screen-head">
+          <div>
+            <div class="eyebrow">Spend & Upgrade</div>
+            <h2>Shop</h2>
+          </div>
+          <button class="icon-btn backHomeBtn">⌂</button>
+        </div>
+        <div class="wallet-line">Wallet: <strong id="shopCoins">0</strong> Coins</div>
+        <div class="shop-tabs">
+          <button class="tab-btn active" data-tab="bundles">Bundles</button>
+          <button class="tab-btn" data-tab="coins">Coin Packs</button>
+          <button class="tab-btn" data-tab="items">Items</button>
+          <button class="tab-btn" data-tab="upgrades">Upgrades</button>
+          <button class="tab-btn" data-tab="skins">Ships</button>
+        </div>
+        <div id="shopContent" class="shop-content"></div>
+      </div>
+    </section>
+
+    <section id="leaderboardScreen" class="screen menu-screen">
+      <div class="panel pop-in">
+        <div class="screen-head">
+          <div>
+            <div class="eyebrow">Local Hall of Fame</div>
+            <h2>Leaderboard</h2>
+          </div>
+          <button class="icon-btn backHomeBtn">⌂</button>
+        </div>
+        <div id="leaderboardList" class="leaderboard-list"></div>
+      </div>
+    </section>
+
+    <section id="settingsScreen" class="screen menu-screen">
+      <div class="panel pop-in">
+        <div class="screen-head">
+          <div>
+            <div class="eyebrow">Tune Your Run</div>
+            <h2>Settings</h2>
+          </div>
+          <button class="icon-btn backHomeBtn">⌂</button>
+        </div>
+        <div class="setting-row">
+          <div><strong>Music</strong><span>Background synth loop</span></div>
+          <button class="toggle-btn" id="musicToggle">On</button>
+        </div>
+        <div class="setting-row">
+          <div><strong>Sound Effects</strong><span>Coins, hits, skills, buttons</span></div>
+          <button class="toggle-btn" id="sfxToggle">On</button>
+        </div>
+        <div class="controls-card">
+          <h3>Controls</h3>
+          <p><strong>PC:</strong> WASD / Arrow Keys to move, Space to use boost, P to pause, R to restart.</p>
+          <p><strong>Mobile:</strong> Drag on the game screen to move. Tap the BOOST button to use a speed skill.</p>
+        </div>
+        <button class="glass-btn full" id="logoutSettingsBtn">Sign Out</button>
+        <button class="danger-btn" id="resetDataBtn">Reset Current Account Data</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
