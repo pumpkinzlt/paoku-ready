@@ -443,3 +443,24 @@ Verified flows:
 - Real `DoRequest` errors are shown in the checkout modal and stored at `window.__lastGalaxyPayError`.
 - `window.__GalaxyPaymentHealth()` returns payment loading status, last options, and last error for debugging.
 - Order IDs are shorter and alphanumeric-only, for example `AMIK3Z9AB12CD`.
+
+
+## Critical Start and Restart Stability Fix
+
+- Start / Restart / Mode Start now use deterministic launch paths and no longer get silently blocked by stale launch locks.
+- Removed the risky `canLaunchNow()` gate from Restart.
+- Added strict touchend → click de-duplication without blocking legitimate quick restarts.
+- Start and Restart now clear Game Over, Pause, Continue, Checkout, and onboarding overlays before launching.
+- Home buttons now fully clear transient game state before returning to Start Screen.
+- `window.__GalaxyStartHealth()` now shows active screen, run state, overlay state, runId, and launch lock status for debugging.
+
+
+## First Start Runtime Watchdog Fix
+
+- Fixed the first-run freeze where the game could enter Game Screen but the road/score did not advance.
+- Added a guarded game loop so a one-frame runtime error cannot permanently kill `requestAnimationFrame`.
+- Start and Restart now explicitly ensure the game loop is running.
+- Added a first-start watchdog that nudges the first run if score/distance do not advance shortly after launch.
+- First run now seeds a safe opening coin line and distant obstacle so the screen immediately feels alive.
+- Runtime dt is clamped and repaired if the first frame receives a zero/invalid timestamp.
+- `window.__GalaxyStartHealth()` now reports loop status, score, distance, speed, loop errors, obstacle count, and coin count.

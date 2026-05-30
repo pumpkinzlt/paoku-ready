@@ -265,6 +265,14 @@
   let selectedCheckout = null;
   let paymentScriptsReady = false;
   let paymentScriptPromise = null;
+  let lastStartClickAt = 0;
+  let lastRestartClickAt = 0;
+  let lastModeStartClickAt = 0;
+  let loopRunning = false;
+  let lastLoopAt = 0;
+  let lastProgressAt = 0;
+  let firstStartWatchdog = 0;
+  let loopErrorCount = 0;
 
   const GALAXY_SECTORS = [
     {
@@ -1013,8 +1021,9 @@
       this.runCoins = 0;
       this.collectedLevelCoins = 0;
       this.speed = this.baseSpeed;
-      this.spawnTimer = 0.7;
-      this.coinTimer = 0.25;
+      // First-run pacing: spawn early so the first screen never looks frozen.
+      this.spawnTimer = 0.16;
+      this.coinTimer = 0.10;
       this.scorePulse = 0;
       this.speedFx = 1;
       this.boostPulse = 0;
@@ -1121,7 +1130,40 @@
   }
 
   function releaseLaunchLockSoon() {
-    setTimeout(() => { game.launchLockUntil = 0; }, 450);
+    setTimeout(() => { game.launchLockUntil = 0; }, 120);
+  }
+
+  function shouldIgnoreFollowUpClick(event, touchKey, clickKey, gap = 750) {
+    const now = performance.now();
+    if (event && event.type === 'touchend') {
+      game[touchKey] = now;
+      return false;
+    }
+    if (event && event.type === 'click' && game[touchKey] && now - game[touchKey] < gap) {
+      return true;
+    }
+    return false;
+  }
+
+  function shouldIgnoreRapidAction(key, gap = 260) {
+    const now = performance.now();
+    if (game[key] && now - game[key] < gap) return true;
+    game[key] = now;
+    return false;
+  }
+
+  function hardResetLaunchState() {
+    game.launchLockUntil = 0;
+    game.lastRestartTouchAt = 0;
+    game.lastRestartAt = 0;
+    directStartTouchAt = 0;
+    modeStartTouchAt = 0;
+    if (typeof closeCheckout === 'function') closeCheckout();
+    if (dom.paymentCheckoutOverlay) dom.paymentCheckoutOverlay.classList.add('hidden');
+    if (dom.gameOverOverlay) dom.gameOverOverlay.classList.add('hidden');
+    if (dom.pauseOverlay) dom.pauseOverlay.classList.add('hidden');
+    if (dom.continueCard) dom.continueCard.classList.add('hidden');
+    hideOnboardingToast(false);
   }
 
   function hideOnboardingToast(persist = false) {
@@ -1155,7 +1197,7 @@
 
     dom.onboardingToast.classList.remove('hidden');
     if (onboardingTimer) clearTimeout(onboardingTimer);
-    onboardingTimer = setTimeout(() => hideOnboardingToast(false), mobile ? 5200 : 4200);
+    onboardingTimer = setTimeout(() => hideOnboardingToast(false), mobile ? 2600 : 2400);
   }
 
   function updateGameOverGoalCard(finalScore) {
@@ -1221,11 +1263,8 @@
     if (event && event.preventDefault) event.preventDefault();
     if (event && event.stopPropagation) event.stopPropagation();
 
-    const now = performance.now();
-    if (event && event.type === 'touchend') modeStartTouchAt = now;
-    if (event && event.type === 'click' && modeStartTouchAt && now - modeStartTouchAt < 750) return;
-    if (modeStartAt && now - modeStartAt < 480) return;
-    modeStartAt = now;
+    if (shouldIgnoreFollowUpClick(event, 'lastModeStartTouchAt', 'lastModeStartClickAt')) return;
+    if (shouldIgnoreRapidAction('lastModeStartClickAt', 260)) return;
 
     try { audio.click(); } catch (error) {}
     if (!requireLogin('Full game modes')) return;
@@ -1233,9 +1272,8 @@
     const safe = sanitizeModeSelection(selectedMode, selectedLevel);
     renderModes();
 
-    // Explicit mode launch: do not let stale card-tap/touch locks block the game start.
-    game.launchLockUntil = 0;
     try {
+      hardResetLaunchState();
       doLaunchRun(safe.mode, safe.level, { skipLock: true });
     } catch (error) {
       emergencyLaunchRun(error);
@@ -1272,12 +1310,83 @@
     return { mode: selectedMode, level: selectedLevel };
   }
 
+
+  function seedOpeningRunContent() {
+    // Give the first second visible life even before normal timers kick in.
+    if (!game.player) return;
+    try {
+      if (!game.coins.length) {
+        const lane = clamp(Math.round((game.player.x - roadLeft()) / Math.max(1, roadWidth() / 2)), 0, 2);
+        for (let i = 0; i < 5; i += 1) {
+          game.coins.push({
+            x: getLaneX(lane) + Math.sin(i * 0.8) * 12,
+            y: -80 - i * 42,
+            r: 10,
+            value: i === 4 ? 5 : 1,
+            spin: rand(0, Math.PI * 2),
+            magneted: false,
+            missionCoin: game.mode === 'level'
+          });
+        }
+      }
+      if (!game.obstacles.length) {
+        const safeLane = clamp(Math.round((game.player.x - roadLeft()) / Math.max(1, roadWidth() / 2)), 0, 2);
+        const lanes = [0, 1, 2].filter((lane) => lane !== safeLane);
+        const obstacleLane = pick(lanes.length ? lanes : [0, 2]);
+        game.obstacles.push(createSpaceObstacle('asteroid', obstacleLane, -360, 1));
+      }
+      game.spawnTimer = Math.min(game.spawnTimer, 0.18);
+      game.coinTimer = Math.min(game.coinTimer, 0.08);
+    } catch (error) {
+      console.warn('Opening run seed skipped:', error);
+    }
+  }
+
+  function ensureGameLoopRunning(reason = 'unknown') {
+    const now = performance.now();
+    if (!loopRunning || !animationId || now - lastLoopAt > 700) {
+      try {
+        if (animationId) cancelAnimationFrame(animationId);
+      } catch (error) {}
+      loopRunning = true;
+      game.lastTime = now;
+      lastLoopAt = now;
+      ensureGameLoopRunning('init');
+      console.log(`[Galaxy Run Rivals] Game loop ensured: ${reason}`);
+    }
+  }
+
+  function scheduleFirstStartWatchdog(runId) {
+    if (firstStartWatchdog) clearTimeout(firstStartWatchdog);
+    lastProgressAt = performance.now();
+    firstStartWatchdog = setTimeout(() => {
+      if (!game.running || game.paused || game.over || game.runId !== runId) return;
+      const stuck = game.score < 2 && game.distance < 8;
+      if (stuck) {
+        console.warn('[Galaxy Run Rivals] First-start watchdog nudged the run loop.');
+        game.lastTime = performance.now() - 16;
+        game.spawnTimer = 0.02;
+        game.coinTimer = 0.02;
+        seedOpeningRunContent();
+        // Perform one safe deterministic tick so the screen visibly advances even if RAF was delayed.
+        try {
+          updateGame(1 / 60);
+          updateHUD();
+        } catch (error) {
+          console.warn('First-start watchdog tick failed:', error);
+        }
+      }
+      ensureGameLoopRunning('first-start-watchdog');
+    }, 650);
+  }
+
   function doLaunchRun(mode = selectedMode, level = selectedLevel, options = {}) {
     if (!options.skipLock && !canLaunchNow()) return false;
     try {
       try { audio.unlock(); } catch (error) {}
       const prepared = prepareRunData(mode, level);
 
+      hardResetLaunchState();
       clearTransientRunState();
       game.runId = (game.runId || 0) + 1;
       game.mode = isGuestMode() ? 'classic' : prepared.mode;
@@ -1292,7 +1401,9 @@
       game.continueUsed = false;
       game.revivedThisRun = false;
       game.reviveArmed = false;
-      game.lastTime = performance.now();
+      game.lastTime = performance.now() - 16;
+      lastProgressAt = performance.now();
+      seedOpeningRunContent();
 
       if (dom.pauseOverlay) dom.pauseOverlay.classList.add('hidden');
       if (dom.gameOverOverlay) dom.gameOverOverlay.classList.add('hidden');
@@ -1302,6 +1413,8 @@
       saveData();
 
       showScreen('gameScreen');
+      ensureGameLoopRunning('launch');
+      scheduleFirstStartWatchdog(game.runId);
       renderItemDock();
       updateHUD();
       updateMiniLeaderboard();
@@ -1333,10 +1446,13 @@
       game.paused = false;
       game.over = false;
       game.continueUsed = false;
-      game.lastTime = performance.now();
+      game.lastTime = performance.now() - 16;
+      seedOpeningRunContent();
 
       if (dom.playerNameInput) dom.playerNameInput.value = data.playerName;
       showScreen('gameScreen');
+      ensureGameLoopRunning('emergency-launch');
+      scheduleFirstStartWatchdog(game.runId);
       try { renderItemDock(); updateHUD(); updateMiniLeaderboard(); } catch (uiError) {}
       try { addFloatingText(W / 2, H * 0.28, 'Rookie Mode: dodge and collect!', '#38e8ff'); showOnboardingToast(true); } catch (fxError) {}
       releaseLaunchLockSoon();
@@ -1351,11 +1467,13 @@
     try {
       const safeMode = isValidMode(mode) ? mode : 'classic';
       const safeLevel = Number(level || 1);
-      if (options.force !== false) game.launchLockUntil = 0;
-      const started = doLaunchRun(safeMode, safeLevel, { skipLock: options.force !== false });
+
+      // Start is a player command. Never let a stale launch lock silently block it.
+      if (options.force !== false) hardResetLaunchState();
+      const started = doLaunchRun(safeMode, safeLevel, { skipLock: true });
       if (!started) {
-        game.launchLockUntil = 0;
-        doLaunchRun(safeMode, safeLevel, { skipLock: true });
+        hardResetLaunchState();
+        doLaunchRun('classic', 1, { skipLock: true });
       }
     } catch (error) {
       emergencyLaunchRun(error);
@@ -1366,14 +1484,10 @@
     if (event && event.preventDefault) event.preventDefault();
     if (event && event.stopPropagation) event.stopPropagation();
 
-    const now = performance.now();
-    if (event && event.type === 'touchend') directStartTouchAt = now;
-    if (event && event.type === 'click' && directStartTouchAt && now - directStartTouchAt < 750) return;
-    if (directStartAt && now - directStartAt < 360) return;
-    directStartAt = now;
+    if (shouldIgnoreFollowUpClick(event, 'lastStartTouchAt', 'lastStartClickAt')) return;
+    if (shouldIgnoreRapidAction('lastStartClickAt', 220)) return;
 
     try { audio.click(); } catch (error) {}
-    game.launchLockUntil = 0;
     startGame('classic', 1, { force: true });
   }
 
@@ -1381,29 +1495,15 @@
     if (event && event.preventDefault) event.preventDefault();
     if (event && event.stopPropagation) event.stopPropagation();
 
-    const now = performance.now();
-    if (event && event.type === 'touchend') {
-      game.lastRestartTouchAt = now;
-    }
-    if (event && event.type === 'click' && game.lastRestartTouchAt && now - game.lastRestartTouchAt < 750) {
-      return;
-    }
-    if (game.lastRestartAt && now - game.lastRestartAt < 420) {
-      return;
-    }
-    game.lastRestartAt = now;
-
-    if (!canLaunchNow()) return;
+    if (shouldIgnoreFollowUpClick(event, 'lastRestartTouchAt', 'lastRestartClickAt')) return;
+    if (shouldIgnoreRapidAction('lastRestartClickAt', 260)) return;
 
     const mode = isGuestMode() ? 'classic' : (game.mode || selectedMode || 'classic');
     const level = isGuestMode() ? 1 : (game.level || selectedLevel || 1);
 
     try {
-      // Dedicated restart cleanup: remove every temporary end-run state before rebuilding.
+      hardResetLaunchState();
       clearTransientRunState();
-      if (dom.gameOverOverlay) dom.gameOverOverlay.classList.add('hidden');
-      if (dom.pauseOverlay) dom.pauseOverlay.classList.add('hidden');
-      if (dom.continueCard) dom.continueCard.classList.add('hidden');
       doLaunchRun(mode, level, { skipLock: true });
     } catch (error) {
       emergencyLaunchRun(error);
@@ -1720,7 +1820,8 @@
 
   function updateGame(dt) {
     if (!game.running || game.paused || game.over) return;
-    dt = Math.min(dt, 0.033);
+    if (!Number.isFinite(dt) || dt <= 0) dt = 1 / 60;
+    dt = clamp(dt, 1 / 240, 0.033);
     saveTimer += dt;
     ambientTick += dt;
     updateMotionState(dt);
@@ -1734,6 +1835,7 @@
 
     const scoreGain = (70 + diff * 18) * dt * boostMul * rules.scoreMul;
     game.score += scoreGain;
+    if (scoreGain > 0 || game.speed > 0) lastProgressAt = performance.now();
     if (game.mode === 'arena') {
       const rank = getArenaRank();
       // Higher rank earns a small live-race score bonus.
@@ -3647,12 +3749,24 @@
   }
 
   function loop(now) {
-    const dt = (now - (game.lastTime || now)) / 1000;
-    game.lastTime = now;
-    if (game.over) updateGameOverVisuals(dt);
-    else updateGame(dt);
-    draw();
-    animationId = requestAnimationFrame(loop);
+    loopRunning = true;
+    lastLoopAt = performance.now();
+    try {
+      if (!Number.isFinite(now)) now = performance.now();
+      let dt = (now - (game.lastTime || now - 16)) / 1000;
+      if (!Number.isFinite(dt) || dt <= 0) dt = 1 / 60;
+      dt = clamp(dt, 1 / 240, 0.05);
+      game.lastTime = now;
+      if (game.over) updateGameOverVisuals(dt);
+      else updateGame(dt);
+      draw();
+    } catch (error) {
+      loopErrorCount += 1;
+      console.error('[Galaxy Run Rivals] Game loop recovered:', error);
+      try { draw(); } catch (drawError) {}
+    } finally {
+      animationId = requestAnimationFrame(loop);
+    }
   }
 
   const PAYMENT_PAY_TYPES = {
@@ -4217,15 +4331,15 @@
     });
 
     dom.pauseBtn.addEventListener('click', () => togglePause());
-    dom.gameHomeBtn.addEventListener('click', () => { audio.click(); showScreen('startScreen'); });
+    dom.gameHomeBtn.addEventListener('click', () => { audio.click(); hardResetLaunchState(); clearTransientRunState(); showScreen('startScreen'); });
     dom.resumeBtn.addEventListener('click', () => togglePause(false));
     dom.restartPauseBtn.addEventListener('click', restartGame);
     dom.restartPauseBtn.addEventListener('touchend', restartGame, { passive: false });
-    dom.homePauseBtn.addEventListener('click', () => { audio.click(); if (typeof clearTransientRunState === 'function') clearTransientRunState(); showScreen('startScreen'); });
+    dom.homePauseBtn.addEventListener('click', () => { audio.click(); hardResetLaunchState(); clearTransientRunState(); showScreen('startScreen'); });
     dom.continueRunBtn.addEventListener('click', continueRun);
     dom.restartBtn.addEventListener('click', restartGame);
     dom.restartBtn.addEventListener('touchend', restartGame, { passive: false });
-    dom.homeBtn.addEventListener('click', () => { audio.click(); if (typeof clearTransientRunState === 'function') clearTransientRunState(); showScreen('startScreen'); });
+    dom.homeBtn.addEventListener('click', () => { audio.click(); hardResetLaunchState(); clearTransientRunState(); showScreen('startScreen'); });
     if (dom.mobileItemsToggle) {
       dom.mobileItemsToggle.addEventListener('click', toggleMobileItems);
       dom.mobileItemsToggle.addEventListener('touchend', toggleMobileItems, { passive: false });
@@ -4345,7 +4459,7 @@
         handlePaymentReturn();
         game.resetRuntime();
         showScreen('startScreen');
-        animationId = requestAnimationFrame(loop);
+        ensureGameLoopRunning('init-recover');
       } catch (fatal) {
         console.error('Init failed:', fatal);
       }
@@ -4395,9 +4509,27 @@
     return {
       loaded: !!window.__GalaxyRunLoaded,
       activeScreen: document.querySelector('.screen.active')?.id || null,
+      currentScreen,
+      running: !!game.running,
+      over: !!game.over,
+      paused: !!game.paused,
+      runId: game.runId,
+      launchLockUntil: game.launchLockUntil || 0,
       hasStartButton: !!document.querySelector('#startBtn'),
       hasGameCanvas: !!document.querySelector('#gameCanvas'),
-      hasDoRequest: typeof window.DoRequest === 'function' || typeof DoRequest === 'function'
+      gameOverHidden: dom.gameOverOverlay ? dom.gameOverOverlay.classList.contains('hidden') : null,
+      pauseHidden: dom.pauseOverlay ? dom.pauseOverlay.classList.contains('hidden') : null,
+      checkoutHidden: dom.paymentCheckoutOverlay ? dom.paymentCheckoutOverlay.classList.contains('hidden') : null,
+      hasDoRequest: typeof window.DoRequest === 'function' || typeof DoRequest === 'function',
+      score: Math.floor(game.score || 0),
+      distance: Math.floor(game.distance || 0),
+      speed: Math.floor(game.speed || 0),
+      loopRunning,
+      lastLoopAgoMs: Math.floor(performance.now() - (lastLoopAt || 0)),
+      lastProgressAgoMs: Math.floor(performance.now() - (lastProgressAt || 0)),
+      loopErrorCount,
+      obstacles: game.obstacles ? game.obstacles.length : 0,
+      coins: game.coins ? game.coins.length : 0
     };
   };
   init();
