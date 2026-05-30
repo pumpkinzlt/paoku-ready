@@ -4486,53 +4486,6 @@
     };
   }
 
-  function isMobilePaymentContext(event) {
-    return isMobileLayout() || Boolean(event && (event.type === 'touchend' || event.pointerType === 'touch'));
-  }
-
-  function openPaymentBridge(payType, productName) {
-    if (!isMobileLayout()) return null;
-    try {
-      const bridge = window.open('', '_blank');
-      if (!bridge) return null;
-      bridge.document.open();
-      bridge.document.write(`<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Opening Payment</title>
-<style>
-body{margin:0;min-height:100vh;display:grid;place-items:center;background:#06101f;color:#eafaff;font-family:Arial,sans-serif}
-.card{max-width:360px;margin:24px;padding:24px;border-radius:22px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);text-align:center}
-h1{font-size:20px;margin:0 0 10px}p{opacity:.76;line-height:1.45}.spin{width:36px;height:36px;border-radius:50%;border:3px solid rgba(255,255,255,.2);border-top-color:#38e8ff;margin:0 auto 16px;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
-</style></head><body><div class="card"><div class="spin"></div><h1>Opening secure payment</h1><p>${productName || 'Galaxy Run Rivals'} checkout is loading. Please wait...</p></div></body></html>`);
-      bridge.document.close();
-      return bridge;
-    } catch (error) {
-      return null;
-    }
-  }
-
-  function redirectPaymentBridge(bridge, url) {
-    if (!bridge || !url) return false;
-    try {
-      bridge.location.href = url;
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function closePaymentBridgeIfBlank(bridge) {
-    if (!bridge) return;
-    setTimeout(() => {
-      try {
-        const href = String(bridge.location && bridge.location.href || '');
-        if (!href || href === 'about:blank') bridge.close();
-      } catch (error) {
-        // Cross-origin means it navigated successfully; do not close.
-      }
-    }, 1800);
-  }
-
   function resolvePaymentRedirect(result) {
     if (!result) return '';
     if (typeof result === 'string' && /^https?:\/\//i.test(result)) return result;
@@ -4547,25 +4500,23 @@ h1{font-size:20px;margin:0 0 10px}p{opacity:.76;line-height:1.45}.spin{width:36p
     return '';
   }
 
-  function callPaymentApi(options, bridgeWindow = null) {
+  function callPaymentApi(options) {
     window.__lastGalaxyPayOptions = options;
     console.log('[Galaxy Run Rivals] Calling DoRequest(options):', options);
 
+    // Direct SDK call only. Do not open an extra bridge window on mobile.
+    // Some payment SDKs handle their own redirect/window internally.
     const result = typeof DoRequest === 'function' ? DoRequest(options) : window.DoRequest(options);
     window.__lastGalaxyPayReturn = result || null;
 
     const redirectUrl = resolvePaymentRedirect(result);
     if (redirectUrl) {
-      if (!redirectPaymentBridge(bridgeWindow, redirectUrl)) window.location.href = redirectUrl;
+      window.location.href = redirectUrl;
     } else if (result && typeof result.then === 'function') {
       result.then((resolved) => {
         window.__lastGalaxyPayReturn = resolved || null;
         const asyncUrl = resolvePaymentRedirect(resolved);
-        if (asyncUrl) {
-          if (!redirectPaymentBridge(bridgeWindow, asyncUrl)) window.location.href = asyncUrl;
-        } else {
-          closePaymentBridgeIfBlank(bridgeWindow);
-        }
+        if (asyncUrl) window.location.href = asyncUrl;
       }).catch((error) => {
         window.__lastGalaxyPayError = {
           message: readablePaymentError(error),
@@ -4573,10 +4524,7 @@ h1{font-size:20px;margin:0 0 10px}p{opacity:.76;line-height:1.45}.spin{width:36p
           options,
           time: new Date().toISOString()
         };
-        closePaymentBridgeIfBlank(bridgeWindow);
       });
-    } else {
-      closePaymentBridgeIfBlank(bridgeWindow);
     }
 
     return result;
@@ -4588,7 +4536,7 @@ h1{font-size:20px;margin:0 0 10px}p{opacity:.76;line-height:1.45}.spin{width:36p
     return error.message || error.reason || error.toString() || 'Unknown payment error';
   }
 
-  function confirmCheckout(payType = PAYMENT_PAY_TYPES.card, optionsArg = {}) {
+  function confirmCheckout(payType = PAYMENT_PAY_TYPES.card) {
     if (!selectedCheckout) {
       dom.checkoutStatus.textContent = 'Please select a product first.';
       return false;
@@ -4614,11 +4562,8 @@ h1{font-size:20px;margin:0 0 10px}p{opacity:.76;line-height:1.45}.spin{width:36p
           ? 'Payment component ready. Tap your payment method again.'
           : 'Payment component failed to load. Refresh and try again.';
       });
-      closePaymentBridgeIfBlank(optionsArg.bridgeWindow || null);
       return false;
     }
-
-    const bridgeWindow = optionsArg.bridgeWindow || null;
 
     const options = buildPaymentOptions(selectedCheckout, payType, email);
     const localPayload = options._localPayload;
@@ -4634,7 +4579,7 @@ h1{font-size:20px;margin:0 0 10px}p{opacity:.76;line-height:1.45}.spin{width:36p
     };
 
     try {
-      callPaymentApi(options, bridgeWindow);
+      callPaymentApi(options);
       window.__lastGalaxyPayStatus = {
         state: 'called',
         options,
@@ -4658,7 +4603,6 @@ h1{font-size:20px;margin:0 0 10px}p{opacity:.76;line-height:1.45}.spin{width:36p
         time: new Date().toISOString()
       };
       console.error('[Galaxy Run Rivals] DoRequest failed:', error);
-      closePaymentBridgeIfBlank(bridgeWindow);
       // Do not show a browser popup here. Some payment SDKs may open/redirect and still throw a noisy sync error.
       // Keep the message inside the checkout modal so a successful payment jump is not interrupted.
       dom.checkoutStatus.textContent = `Payment did not open here. If a checkout page opened, please complete it there. Otherwise try again. (${message})`;
@@ -4786,6 +4730,14 @@ h1{font-size:20px;margin:0 0 10px}p{opacity:.76;line-height:1.45}.spin{width:36p
       if (event && event.preventDefault) event.preventDefault();
       if (event && event.stopPropagation) event.stopPropagation();
 
+      if (payButton.disabled || payButton.classList.contains('disabled')) {
+        dom.checkoutStatus.textContent = isPaymentApiReady()
+          ? 'Payment component ready. Tap your payment method again.'
+          : 'Payment component is loading. Please wait, then tap your payment method again.';
+        warmPaymentScriptsFromGesture('disabled-pay-button');
+        return false;
+      }
+
       const now = performance.now();
       if (event && event.type === 'touchend') checkoutPayTouchAt = now;
       if (event && event.type === 'click' && checkoutPayTouchAt && now - checkoutPayTouchAt < 750) return false;
@@ -4794,13 +4746,8 @@ h1{font-size:20px;margin:0 0 10px}p{opacity:.76;line-height:1.45}.spin{width:36p
       checkoutPayLastType = String(payButton.dataset.checkoutPay || '');
       checkoutPayLastAt = now;
 
-      const payType = Number(payButton.dataset.checkoutPay);
-      const bridgeWindow = isMobilePaymentContext(event)
-        ? openPaymentBridge(payType, selectedCheckout && selectedCheckout.name)
-        : null;
-
-      // Keep this call directly inside the touch/click handler so mobile browsers keep the navigation gesture.
-      return confirmCheckout(payType, { event, bridgeWindow });
+      // Direct SDK call inside the user's touch/click gesture. No extra bridge window.
+      return confirmCheckout(Number(payButton.dataset.checkoutPay));
     }
 
     document.addEventListener('click', (event) => {
@@ -5187,7 +5134,7 @@ h1{font-size:20px;margin:0 0 10px}p{opacity:.76;line-height:1.45}.spin{width:36p
       lastStatus: window.__lastGalaxyPayStatus || null,
       lastError: window.__lastGalaxyPayError || null,
       touchState: { checkoutPayTouchAt, checkoutPayLastAt, checkoutPayLastType },
-      mobileBridgeSupported: typeof window.open === 'function',
+      paymentMode: 'direct-do-request',
       currentScreen,
       selectedCheckout
     };

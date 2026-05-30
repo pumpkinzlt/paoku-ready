@@ -553,3 +553,13 @@ Payment:
 - Re-ran Start / Restart / mobile control / payment / item / audio / login-shop regression checks.
 - Fixed one item-touch edge case found during testing: a touch event on one item could temporarily suppress a quick click on another item because the de-duplication state was global instead of item-specific.
 - Item touch de-duplication is now keyed by item type, so fast sequential item use is more reliable.
+
+
+## Direct Mobile Payment Fix
+
+- Removed the mobile payment bridge/blank waiting page.
+- Mobile payment now calls `DoRequest(options)` directly inside the touch/click handler.
+- Disabled payment buttons are now respected by the touch handler, so users cannot trigger checkout before the SDK is ready.
+- The game no longer depends on the SDK returning a payment URL, but still follows a URL if the SDK does return one.
+- PC speed keeps script preload hints for `crypto-js.min.js` and `PayApi-v2.js`.
+- Debug: `window.__GalaxyPaymentHealth()` now reports `paymentMode: "direct-do-request"`.
