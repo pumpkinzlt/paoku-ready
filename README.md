@@ -563,3 +563,12 @@ Payment:
 - The game no longer depends on the SDK returning a payment URL, but still follows a URL if the SDK does return one.
 - PC speed keeps script preload hints for `crypto-js.min.js` and `PayApi-v2.js`.
 - Debug: `window.__GalaxyPaymentHealth()` now reports `paymentMode: "direct-do-request"`.
+
+
+## Mobile Payment Click-First Fix
+
+- Mobile payment no longer calls `DoRequest` from `touchend`; touch only warms the SDK and allows the browser's native click to follow.
+- `DoRequest(options)` is now called from the actual payment button click event for better compatibility with mobile payment SDKs.
+- Added direct button-level checkout listeners in addition to document delegation.
+- Added static deferred script references for `crypto-js.min.js` and `PayApi-v2.js` after `game.js`; this speeds up SDK readiness without blocking game startup.
+- Payment mode in debug is now `click-first-direct-do-request`.

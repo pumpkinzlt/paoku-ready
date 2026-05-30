@@ -278,6 +278,7 @@
   let checkoutPayTouchAt = 0;
   let checkoutPayLastAt = 0;
   let checkoutPayLastType = '';
+  let checkoutPayBusyUntil = 0;
   let lastStartClickAt = 0;
   let lastRestartClickAt = 0;
   let lastModeStartClickAt = 0;
@@ -4366,6 +4367,65 @@
     }
   }
 
+  function handleCheckoutPayButton(payButton, event) {
+    if (!payButton) return false;
+
+    // Important for mobile: touchend should not call DoRequest and should not prevent the follow-up click.
+    // Some payment SDKs work more reliably when called from the native click event.
+    if (event && event.type === 'touchend') {
+      checkoutPayTouchAt = performance.now();
+      warmPaymentScriptsFromGesture('checkout-touch-only');
+      return false;
+    }
+
+    if (event && event.preventDefault) event.preventDefault();
+    if (event && event.stopPropagation) event.stopPropagation();
+
+    if (payButton.disabled || payButton.classList.contains('disabled')) {
+      dom.checkoutStatus.textContent = isPaymentApiReady()
+        ? 'Payment component ready. Tap your payment method again.'
+        : 'Payment component is loading. Please wait, then tap your payment method again.';
+      warmPaymentScriptsFromGesture('disabled-pay-button');
+      return false;
+    }
+
+    const now = performance.now();
+    if (now < checkoutPayBusyUntil) return false;
+    if (checkoutPayLastType === String(payButton.dataset.checkoutPay) && checkoutPayLastAt && now - checkoutPayLastAt < 900) return false;
+
+    checkoutPayLastType = String(payButton.dataset.checkoutPay || '');
+    checkoutPayLastAt = now;
+    checkoutPayBusyUntil = now + 1300;
+
+    // Direct SDK call inside the real click gesture. No bridge window and no dependency on SDK return URL.
+    const result = confirmCheckout(Number(payButton.dataset.checkoutPay));
+    setTimeout(() => { checkoutPayBusyUntil = 0; }, 1500);
+    return result;
+  }
+
+  function bindCheckoutPayButtonsDirectly() {
+    document.querySelectorAll('[data-checkout-pay]').forEach((button) => {
+      if (button.dataset.boundCheckoutPay === '1') return;
+      button.dataset.boundCheckoutPay = '1';
+
+      // Touch only warms and records the gesture. Do not preventDefault here,
+      // because some mobile browsers/payment SDKs rely on the follow-up click.
+      button.addEventListener('touchend', (event) => {
+        checkoutPayTouchAt = performance.now();
+        warmPaymentScriptsFromGesture('checkout-button-touch');
+        if (button.disabled || button.classList.contains('disabled')) {
+          dom.checkoutStatus.textContent = isPaymentApiReady()
+            ? 'Payment component ready. Tap your payment method again.'
+            : 'Payment component is loading. Please wait, then tap your payment method again.';
+        }
+      }, { passive: true });
+
+      button.addEventListener('click', (event) => {
+        handleCheckoutPayButton(button, event);
+      });
+    });
+  }
+
   function openCheckout(kind, id) {
     const summary = productForCheckout(kind, id);
     if (!summary) return;
@@ -4382,6 +4442,7 @@
       ? 'Payment component ready. Choose a payment method.'
       : 'Loading payment component...';
     dom.paymentCheckoutOverlay.classList.remove('hidden');
+    bindCheckoutPayButtonsDirectly();
 
     primePaymentScripts('checkout').then((ready) => {
       if (!selectedCheckout || selectedCheckout.id !== summary.id || !dom.paymentCheckoutOverlay || dom.paymentCheckoutOverlay.classList.contains('hidden')) return;
@@ -4725,30 +4786,7 @@
       return used;
     }
 
-    function handleCheckoutPayButton(payButton, event) {
-      if (!payButton) return false;
-      if (event && event.preventDefault) event.preventDefault();
-      if (event && event.stopPropagation) event.stopPropagation();
 
-      if (payButton.disabled || payButton.classList.contains('disabled')) {
-        dom.checkoutStatus.textContent = isPaymentApiReady()
-          ? 'Payment component ready. Tap your payment method again.'
-          : 'Payment component is loading. Please wait, then tap your payment method again.';
-        warmPaymentScriptsFromGesture('disabled-pay-button');
-        return false;
-      }
-
-      const now = performance.now();
-      if (event && event.type === 'touchend') checkoutPayTouchAt = now;
-      if (event && event.type === 'click' && checkoutPayTouchAt && now - checkoutPayTouchAt < 750) return false;
-      if (checkoutPayLastType === String(payButton.dataset.checkoutPay) && checkoutPayLastAt && now - checkoutPayLastAt < 650) return false;
-
-      checkoutPayLastType = String(payButton.dataset.checkoutPay || '');
-      checkoutPayLastAt = now;
-
-      // Direct SDK call inside the user's touch/click gesture. No extra bridge window.
-      return confirmCheckout(Number(payButton.dataset.checkoutPay));
-    }
 
     document.addEventListener('click', (event) => {
       if (event.target.closest('button')) audio.unlock();
@@ -4871,7 +4909,9 @@
     document.addEventListener('touchend', (event) => {
       const checkoutPayBtn = event.target.closest('[data-checkout-pay]');
       if (checkoutPayBtn) {
-        handleCheckoutPayButton(checkoutPayBtn, event);
+        // Do not prevent default here; mobile payment is opened from the follow-up click.
+        checkoutPayTouchAt = performance.now();
+        warmPaymentScriptsFromGesture('document-pay-touch');
         return;
       }
       const useBtn = event.target.closest('[data-use-item]');
@@ -5133,8 +5173,12 @@
       lastReturn: window.__lastGalaxyPayReturn || null,
       lastStatus: window.__lastGalaxyPayStatus || null,
       lastError: window.__lastGalaxyPayError || null,
-      touchState: { checkoutPayTouchAt, checkoutPayLastAt, checkoutPayLastType },
-      paymentMode: 'direct-do-request',
+      touchState: { checkoutPayTouchAt, checkoutPayLastAt, checkoutPayLastType, checkoutPayBusyUntil },
+      paymentMode: 'click-first-direct-do-request',
+      staticPayScripts: {
+        cryptoReady: window.__GalaxyCryptoReady,
+        payApiLoaded: window.__GalaxyPayApiLoaded
+      },
       currentScreen,
       selectedCheckout
     };
