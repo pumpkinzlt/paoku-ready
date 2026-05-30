@@ -572,3 +572,13 @@ Payment:
 - Added direct button-level checkout listeners in addition to document delegation.
 - Added static deferred script references for `crypto-js.min.js` and `PayApi-v2.js` after `game.js`; this speeds up SDK readiness without blocking game startup.
 - Payment mode in debug is now `click-first-direct-do-request`.
+
+
+## DoPay Promise Fallback Fix
+
+- The PayApi-v2 SDK may implement `DoRequest(data)` as `return (DoPay(data))();`.
+- In current runtime, `DoPay(data)` returns a Promise, so calling `()` on it throws: `DoPay(data) is not a function`.
+- The game still tries `DoRequest(options)` first to match the provided integration method.
+- If that exact Promise wrapper error occurs, the game automatically falls back to `DoPay(options)` directly.
+- Promise results and URL-like SDK results are still handled.
+- Debug: `window.__GalaxyPaymentHealth()` now shows `lastSdkSource` and `lastFallback`.

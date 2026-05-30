@@ -4561,34 +4561,93 @@
     return '';
   }
 
-  function callPaymentApi(options) {
-    window.__lastGalaxyPayOptions = options;
-    console.log('[Galaxy Run Rivals] Calling DoRequest(options):', options);
+  function isDoPayPromiseWrapperError(error) {
+    const message = readablePaymentError(error);
+    return /DoPay\(data\).*not a function/i.test(message)
+      || /DoPay\(data\).*Promise/i.test(message)
+      || /instance of Promise/i.test(message);
+  }
 
-    // Direct SDK call only. Do not open an extra bridge window on mobile.
-    // Some payment SDKs handle their own redirect/window internally.
-    const result = typeof DoRequest === 'function' ? DoRequest(options) : window.DoRequest(options);
+  function getDoPayFunction() {
+    if (typeof DoPay === 'function') return DoPay;
+    if (typeof window.DoPay === 'function') return window.DoPay;
+    return null;
+  }
+
+  function handlePaymentSdkResult(result, options, source = 'unknown') {
     window.__lastGalaxyPayReturn = result || null;
+    window.__lastGalaxyPaySdkSource = source;
 
     const redirectUrl = resolvePaymentRedirect(result);
     if (redirectUrl) {
       window.location.href = redirectUrl;
-    } else if (result && typeof result.then === 'function') {
+      return result;
+    }
+
+    if (result && typeof result.then === 'function') {
       result.then((resolved) => {
         window.__lastGalaxyPayReturn = resolved || null;
+        window.__lastGalaxyPaySdkSource = `${source}:promise-resolved`;
         const asyncUrl = resolvePaymentRedirect(resolved);
-        if (asyncUrl) window.location.href = asyncUrl;
+        if (asyncUrl) {
+          window.location.href = asyncUrl;
+          dom.checkoutStatus.textContent = 'Opening secure payment...';
+        } else {
+          dom.checkoutStatus.textContent = 'Payment request sent. Follow the payment page if it opened.';
+        }
       }).catch((error) => {
         window.__lastGalaxyPayError = {
           message: readablePaymentError(error),
           error,
           options,
+          source,
           time: new Date().toISOString()
         };
+        dom.checkoutStatus.textContent = `Payment SDK error: ${readablePaymentError(error)}`;
       });
     }
 
     return result;
+  }
+
+  function callDoPayFallback(options, originalError = null) {
+    const doPay = getDoPayFunction();
+    if (!doPay) {
+      if (originalError) throw originalError;
+      throw new Error('DoPay is not available');
+    }
+
+    console.warn('[Galaxy Run Rivals] DoRequest failed; using DoPay(options) fallback.', originalError);
+    window.__lastGalaxyPayFallback = {
+      reason: originalError ? readablePaymentError(originalError) : 'manual',
+      time: new Date().toISOString()
+    };
+
+    const result = doPay(options);
+    return handlePaymentSdkResult(result, options, 'DoPay-fallback');
+  }
+
+  function callPaymentApi(options) {
+    window.__lastGalaxyPayOptions = options;
+    window.__lastGalaxyPayError = null;
+    window.__lastGalaxyPayFallback = null;
+    console.log('[Galaxy Run Rivals] Calling DoRequest(options):', options);
+
+    // Primary path: follow the provided integration method.
+    // Fallback path: PayApi-v2 may implement DoRequest as `(DoPay(data))()`,
+    // but the current DoPay returns a Promise, not a function. In that case,
+    // call DoPay(options) directly without the extra ().
+    try {
+      const request = typeof DoRequest === 'function' ? DoRequest : window.DoRequest;
+      if (typeof request !== 'function') return callDoPayFallback(options);
+      const result = request(options);
+      return handlePaymentSdkResult(result, options, 'DoRequest');
+    } catch (error) {
+      if (isDoPayPromiseWrapperError(error)) {
+        return callDoPayFallback(options, error);
+      }
+      throw error;
+    }
   }
 
   function readablePaymentError(error) {
@@ -5171,6 +5230,8 @@
       doRequestType: typeof window.DoRequest === 'function' ? 'window.DoRequest' : (typeof DoRequest === 'function' ? 'DoRequest' : typeof window.DoRequest),
       lastOptions: window.__lastGalaxyPayOptions || null,
       lastReturn: window.__lastGalaxyPayReturn || null,
+      lastSdkSource: window.__lastGalaxyPaySdkSource || null,
+      lastFallback: window.__lastGalaxyPayFallback || null,
       lastStatus: window.__lastGalaxyPayStatus || null,
       lastError: window.__lastGalaxyPayError || null,
       touchState: { checkoutPayTouchAt, checkoutPayLastAt, checkoutPayLastType, checkoutPayBusyUntil },
