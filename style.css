@@ -3140,3 +3140,9 @@ button.tap-active {
     bottom: max(14px, env(safe-area-inset-bottom));
   }
 }
+
+
+/* Flight Sound setting polish */
+.setting-row .toggle-btn.off {
+  opacity: 0.72;
+}

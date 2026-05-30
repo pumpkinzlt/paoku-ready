@@ -530,3 +530,26 @@ Item hotkeys:
 - `DoRequest(options)` is called directly inside the touch/click handler to preserve the mobile browser navigation gesture.
 - If the payment SDK returns a URL-like result, the game follows it with `window.location.href`.
 - Debug: `window.__GalaxyPaymentHealth()` now includes last SDK return and mobile payment touch state.
+
+
+## Audio Separation and Payment Speed Refinement
+
+Audio:
+- Background Music and Flight Sound are now separate settings.
+- New Settings option: Flight Sound.
+- Flight engine is off by default and much quieter when enabled.
+- Background music no longer starts or controls the engine hum.
+- Boost still has a short thruster accent, while normal flight stays soft.
+
+Payment:
+- Added preload hints for PayApi and crypto-js to improve PC payment jump speed without blocking game start.
+- Mobile payment now opens a lightweight secure-payment bridge window directly inside the touch gesture.
+- If the payment SDK returns a URL or a Promise resolving to a URL, the bridge window is redirected there.
+- The regular `DoRequest(options)` call is still preserved.
+
+
+## Full regression check after audio/payment refinement
+
+- Re-ran Start / Restart / mobile control / payment / item / audio / login-shop regression checks.
+- Fixed one item-touch edge case found during testing: a touch event on one item could temporarily suppress a quick click on another item because the de-duplication state was global instead of item-specific.
+- Item touch de-duplication is now keyed by item type, so fast sequential item use is more reliable.

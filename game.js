@@ -248,6 +248,7 @@
     checkoutCancelBtn: $('#checkoutCancelBtn'),
     leaderboardList: $('#leaderboardList'),
     musicToggle: $('#musicToggle'),
+    flightSoundToggle: $('#flightSoundToggle'),
     sfxToggle: $('#sfxToggle'),
     resetDataBtn: $('#resetDataBtn')
   };
@@ -288,6 +289,7 @@
   let itemDockSignature = '';
   let itemDockLastRenderAt = 0;
   let itemTouchAt = 0;
+  let itemTouchKey = '';
   let itemUseLastAt = 0;
   let itemUseLastKey = '';
   let mobileDragStart = null;
@@ -369,7 +371,7 @@
         { name: 'Jett', score: 2650, player: false, date: 'seed' },
         { name: 'Milo', score: 1480, player: false, date: 'seed' }
       ],
-      settings: { music: true, sfx: true },
+      settings: { music: true, flightSound: false, sfx: true },
       dailyReward: { streak: 0, claimedDates: [] },
       lastLoginDate: '',
       claimedMilestones: [],
@@ -853,11 +855,11 @@
       this.ctx = new AudioContext();
 
       this.gain = this.ctx.createGain();
-      this.gain.gain.value = 0.055;
+      this.gain.gain.value = 0.038;
       this.gain.connect(this.ctx.destination);
 
       this.sfxGain = this.ctx.createGain();
-      this.sfxGain.gain.value = 0.72;
+      this.sfxGain.gain.value = 0.48;
       this.sfxGain.connect(this.ctx.destination);
     },
 
@@ -866,6 +868,7 @@
       if (!this.ctx) return;
       if (this.ctx.state === 'suspended') this.ctx.resume();
       if (!this.started && data.settings.music) this.startMusic();
+      if (data.settings.flightSound && currentScreen === 'gameScreen' && game.running) this.setEngine(true, false);
       this.started = true;
     },
 
@@ -873,7 +876,7 @@
       return this.ctx ? this.ctx.currentTime : 0;
     },
 
-    tone(freq, duration = 0.08, type = 'sine', volume = 0.08, destination = null) {
+    tone(freq, duration = 0.08, type = 'sine', volume = 0.05, destination = null) {
       if (!data.settings.sfx) return;
       this.init();
       if (!this.ctx) return;
@@ -891,7 +894,7 @@
       osc.stop(t + duration + 0.03);
     },
 
-    sweep(from, to, duration = 0.22, type = 'sawtooth', volume = 0.055) {
+    sweep(from, to, duration = 0.22, type = 'sawtooth', volume = 0.034) {
       if (!data.settings.sfx) return;
       this.init();
       if (!this.ctx) return;
@@ -904,8 +907,8 @@
       osc.frequency.setValueAtTime(from, t);
       osc.frequency.exponentialRampToValueAtTime(Math.max(1, to), t + duration);
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(900, t);
-      filter.frequency.exponentialRampToValueAtTime(3600, t + duration * 0.75);
+      filter.frequency.setValueAtTime(740, t);
+      filter.frequency.exponentialRampToValueAtTime(2100, t + duration * 0.75);
       gain.gain.setValueAtTime(0.0001, t);
       gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), t + 0.018);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
@@ -917,7 +920,7 @@
       osc.stop(t + duration + 0.04);
     },
 
-    noiseBurst(duration = 0.16, volume = 0.045, filterFreq = 1200, type = 'bandpass') {
+    noiseBurst(duration = 0.16, volume = 0.024, filterFreq = 1200, type = 'bandpass') {
       if (!data.settings.sfx) return;
       this.init();
       if (!this.ctx) return;
@@ -937,7 +940,7 @@
       source.buffer = buffer;
       filter.type = type;
       filter.frequency.setValueAtTime(filterFreq, t);
-      filter.Q.value = 0.8;
+      filter.Q.value = 0.7;
       gain.gain.setValueAtTime(volume, t);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
 
@@ -949,50 +952,41 @@
     },
 
     click() {
-      // UI click: small holographic chirp, not a car button click.
-      this.tone(720, 0.045, 'triangle', 0.032);
-      setTimeout(() => this.tone(1080, 0.035, 'sine', 0.018), 24);
+      this.tone(720, 0.040, 'triangle', 0.020);
     },
 
     coin() {
-      // Star coin pickup: bright energy sparkle.
-      this.tone(1240, 0.055, 'sine', 0.045);
-      setTimeout(() => this.tone(1760, 0.045, 'triangle', 0.035), 38);
-      setTimeout(() => this.tone(2320, 0.035, 'sine', 0.022), 72);
+      this.tone(1240, 0.050, 'sine', 0.030);
+      setTimeout(() => this.tone(1760, 0.040, 'triangle', 0.022), 38);
     },
 
     score() {
-      // Score milestone: soft mission ping.
-      this.tone(660, 0.045, 'triangle', 0.026);
-      setTimeout(() => this.tone(990, 0.055, 'sine', 0.022), 55);
+      this.tone(660, 0.045, 'triangle', 0.018);
+      setTimeout(() => this.tone(990, 0.045, 'sine', 0.015), 55);
     },
 
     skill() {
-      // Generic item / ability: sci-fi power-up sweep.
-      this.sweep(180, 920, 0.20, 'sawtooth', 0.040);
-      setTimeout(() => this.tone(1320, 0.09, 'triangle', 0.026), 90);
+      this.sweep(180, 820, 0.18, 'sawtooth', 0.026);
+      setTimeout(() => this.tone(1180, 0.070, 'triangle', 0.018), 88);
     },
 
     boost() {
-      // Short plasma-thruster lift, used when Speed Boost starts.
       const now = performance.now();
-      if (now - this.lastBoostWhooshAt < 500) return;
+      if (now - this.lastBoostWhooshAt < 520) return;
       this.lastBoostWhooshAt = now;
-      this.sweep(95, 360, 0.28, 'sawtooth', 0.052);
-      this.noiseBurst(0.20, 0.030, 820, 'lowpass');
+      this.sweep(95, 320, 0.24, 'sawtooth', 0.034);
+      this.noiseBurst(0.17, 0.018, 780, 'lowpass');
     },
 
     hit() {
-      // Shield / hull impact, less like a car crash.
-      this.tone(72, 0.16, 'sawtooth', 0.060);
-      setTimeout(() => this.tone(185, 0.10, 'square', 0.035), 35);
-      this.noiseBurst(0.14, 0.040, 1550, 'bandpass');
+      this.tone(74, 0.14, 'sawtooth', 0.036);
+      setTimeout(() => this.tone(188, 0.08, 'square', 0.020), 34);
+      this.noiseBurst(0.12, 0.024, 1350, 'bandpass');
     },
 
     over() {
-      // Power-down sequence.
-      this.sweep(240, 58, 0.34, 'triangle', 0.055);
-      setTimeout(() => this.noiseBurst(0.22, 0.026, 540, 'lowpass'), 80);
+      this.sweep(220, 58, 0.30, 'triangle', 0.034);
+      setTimeout(() => this.noiseBurst(0.18, 0.018, 520, 'lowpass'), 80);
       this.setEngine(false);
     },
 
@@ -1017,18 +1011,18 @@
       shimmer.frequency.setValueAtTime(192, t);
 
       lfo.type = 'sine';
-      lfo.frequency.setValueAtTime(0.055, t);
-      lfoGain.gain.setValueAtTime(9, t);
+      lfo.frequency.setValueAtTime(0.045, t);
+      lfoGain.gain.setValueAtTime(5.5, t);
       lfo.connect(lfoGain);
       lfoGain.connect(padA.frequency);
       lfoGain.connect(padB.frequency);
 
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(680, t);
-      filter.Q.value = 0.45;
+      filter.frequency.setValueAtTime(520, t);
+      filter.Q.value = 0.42;
 
       padGain.gain.setValueAtTime(0.0001, t);
-      padGain.gain.exponentialRampToValueAtTime(0.42, t + 0.8);
+      padGain.gain.exponentialRampToValueAtTime(0.24, t + 0.9);
 
       padA.connect(filter);
       padB.connect(filter);
@@ -1042,7 +1036,6 @@
       lfo.start(t);
 
       this.music = { padA, padB, shimmer, lfo, filter, padGain };
-      this.startEngine();
     },
 
     startEngine() {
@@ -1057,17 +1050,17 @@
 
       low.type = 'sawtooth';
       mid.type = 'triangle';
-      low.frequency.setValueAtTime(52, t);
-      mid.frequency.setValueAtTime(104, t);
-      lfo.frequency.setValueAtTime(5.5, t);
-      lfoGain.gain.setValueAtTime(2.2, t);
+      low.frequency.setValueAtTime(46, t);
+      mid.frequency.setValueAtTime(92, t);
+      lfo.frequency.setValueAtTime(3.2, t);
+      lfoGain.gain.setValueAtTime(1.1, t);
       lfo.connect(lfoGain);
       lfoGain.connect(low.frequency);
       lfoGain.connect(mid.frequency);
 
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(260, t);
-      filter.Q.value = 0.7;
+      filter.frequency.setValueAtTime(180, t);
+      filter.Q.value = 0.55;
       gain.gain.setValueAtTime(0.0001, t);
 
       low.connect(filter);
@@ -1081,40 +1074,56 @@
       this.engine = { low, mid, lfo, lfoGain, filter, gain };
     },
 
-    setEngine(active, boost = false) {
-      if (!data.settings.music) return;
-      this.init();
-      if (!this.ctx) return;
-      if (!this.music) this.startMusic();
-      if (!this.engine) this.startEngine();
+    stopEngine() {
       if (!this.engine) return;
-
-      const t = this.now();
-      const target = active ? (boost ? 0.30 : 0.17) : 0.0001;
-      const freq = active ? (boost ? 520 : 320) : 180;
-      this.engine.gain.gain.cancelScheduledValues(t);
-      this.engine.filter.frequency.cancelScheduledValues(t);
-      this.engine.gain.gain.setTargetAtTime(target, t, 0.18);
-      this.engine.filter.frequency.setTargetAtTime(freq, t, 0.22);
-      this.engineLevel = target;
-    },
-
-    updateEngine(boost = false) {
-      if (!this.engine || !data.settings.music) return;
-      const active = currentScreen === 'gameScreen' && game.running && !game.paused && !game.over;
-      this.setEngine(active, active && boost);
-    },
-
-    stopMusic() {
-      this.setEngine(false);
-      if (this.engine) {
+      try {
+        const t = this.now();
+        this.engine.gain.gain.cancelScheduledValues(t);
+        this.engine.gain.gain.setTargetAtTime(0.0001, t, 0.08);
+      } catch (error) {}
+      setTimeout(() => {
+        if (!this.engine) return;
         try {
           this.engine.low.stop();
           this.engine.mid.stop();
           this.engine.lfo.stop();
         } catch (error) {}
         this.engine = null;
+        this.engineLevel = 0;
+      }, 220);
+    },
+
+    setEngine(active, boost = false) {
+      this.init();
+      if (!this.ctx) return;
+      if (!data.settings.flightSound) {
+        this.stopEngine();
+        return;
       }
+      if (active && !this.engine) this.startEngine();
+      if (!this.engine) return;
+
+      const t = this.now();
+      const target = active ? (boost ? 0.095 : 0.035) : 0.0001;
+      const freq = active ? (boost ? 360 : 210) : 150;
+      this.engine.gain.gain.cancelScheduledValues(t);
+      this.engine.filter.frequency.cancelScheduledValues(t);
+      this.engine.gain.gain.setTargetAtTime(target, t, 0.16);
+      this.engine.filter.frequency.setTargetAtTime(freq, t, 0.20);
+      this.engineLevel = target;
+      if (!active) this.stopEngine();
+    },
+
+    updateEngine(boost = false) {
+      if (!data.settings.flightSound) {
+        this.stopEngine();
+        return;
+      }
+      const active = currentScreen === 'gameScreen' && game.running && !game.paused && !game.over;
+      this.setEngine(active, active && boost);
+    },
+
+    stopMusic() {
       if (!this.music) return;
       try {
         this.music.padA.stop();
@@ -1128,6 +1137,11 @@
     syncMusic() {
       if (data.settings.music) this.startMusic();
       else this.stopMusic();
+    },
+
+    syncEngine() {
+      if (data.settings.flightSound) this.updateEngine(game.active && game.active.speedBoost > 0);
+      else this.stopEngine();
     }
   };
 
@@ -2884,6 +2898,10 @@
     if (dom.logoutSettingsBtn) dom.logoutSettingsBtn.textContent = isGuestMode() ? 'Login / Register' : 'Sign Out';
     dom.musicToggle.textContent = data.settings.music ? 'On' : 'Off';
     dom.musicToggle.classList.toggle('off', !data.settings.music);
+    if (dom.flightSoundToggle) {
+      dom.flightSoundToggle.textContent = data.settings.flightSound ? 'On' : 'Off';
+      dom.flightSoundToggle.classList.toggle('off', !data.settings.flightSound);
+    }
     dom.sfxToggle.textContent = data.settings.sfx ? 'On' : 'Off';
     dom.sfxToggle.classList.toggle('off', !data.settings.sfx);
   }
@@ -4468,16 +4486,68 @@
     };
   }
 
+  function isMobilePaymentContext(event) {
+    return isMobileLayout() || Boolean(event && (event.type === 'touchend' || event.pointerType === 'touch'));
+  }
+
+  function openPaymentBridge(payType, productName) {
+    if (!isMobileLayout()) return null;
+    try {
+      const bridge = window.open('', '_blank');
+      if (!bridge) return null;
+      bridge.document.open();
+      bridge.document.write(`<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening Payment</title>
+<style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#06101f;color:#eafaff;font-family:Arial,sans-serif}
+.card{max-width:360px;margin:24px;padding:24px;border-radius:22px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);text-align:center}
+h1{font-size:20px;margin:0 0 10px}p{opacity:.76;line-height:1.45}.spin{width:36px;height:36px;border-radius:50%;border:3px solid rgba(255,255,255,.2);border-top-color:#38e8ff;margin:0 auto 16px;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
+</style></head><body><div class="card"><div class="spin"></div><h1>Opening secure payment</h1><p>${productName || 'Galaxy Run Rivals'} checkout is loading. Please wait...</p></div></body></html>`);
+      bridge.document.close();
+      return bridge;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function redirectPaymentBridge(bridge, url) {
+    if (!bridge || !url) return false;
+    try {
+      bridge.location.href = url;
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function closePaymentBridgeIfBlank(bridge) {
+    if (!bridge) return;
+    setTimeout(() => {
+      try {
+        const href = String(bridge.location && bridge.location.href || '');
+        if (!href || href === 'about:blank') bridge.close();
+      } catch (error) {
+        // Cross-origin means it navigated successfully; do not close.
+      }
+    }, 1800);
+  }
+
   function resolvePaymentRedirect(result) {
     if (!result) return '';
     if (typeof result === 'string' && /^https?:\/\//i.test(result)) return result;
     if (typeof result === 'object') {
-      return result.url || result.payUrl || result.paymentUrl || result.redirectUrl || result.checkoutUrl || '';
+      const direct = result.url || result.payUrl || result.paymentUrl || result.redirectUrl || result.checkoutUrl || result.href || '';
+      if (direct) return direct;
+      const data = result.data || result.result || result.response || {};
+      if (data && typeof data === 'object') {
+        return data.url || data.payUrl || data.paymentUrl || data.redirectUrl || data.checkoutUrl || data.href || '';
+      }
     }
     return '';
   }
 
-  function callPaymentApi(options) {
+  function callPaymentApi(options, bridgeWindow = null) {
     window.__lastGalaxyPayOptions = options;
     console.log('[Galaxy Run Rivals] Calling DoRequest(options):', options);
 
@@ -4486,7 +4556,27 @@
 
     const redirectUrl = resolvePaymentRedirect(result);
     if (redirectUrl) {
-      window.location.href = redirectUrl;
+      if (!redirectPaymentBridge(bridgeWindow, redirectUrl)) window.location.href = redirectUrl;
+    } else if (result && typeof result.then === 'function') {
+      result.then((resolved) => {
+        window.__lastGalaxyPayReturn = resolved || null;
+        const asyncUrl = resolvePaymentRedirect(resolved);
+        if (asyncUrl) {
+          if (!redirectPaymentBridge(bridgeWindow, asyncUrl)) window.location.href = asyncUrl;
+        } else {
+          closePaymentBridgeIfBlank(bridgeWindow);
+        }
+      }).catch((error) => {
+        window.__lastGalaxyPayError = {
+          message: readablePaymentError(error),
+          error,
+          options,
+          time: new Date().toISOString()
+        };
+        closePaymentBridgeIfBlank(bridgeWindow);
+      });
+    } else {
+      closePaymentBridgeIfBlank(bridgeWindow);
     }
 
     return result;
@@ -4498,7 +4588,7 @@
     return error.message || error.reason || error.toString() || 'Unknown payment error';
   }
 
-  function confirmCheckout(payType = PAYMENT_PAY_TYPES.card) {
+  function confirmCheckout(payType = PAYMENT_PAY_TYPES.card, optionsArg = {}) {
     if (!selectedCheckout) {
       dom.checkoutStatus.textContent = 'Please select a product first.';
       return false;
@@ -4524,8 +4614,11 @@
           ? 'Payment component ready. Tap your payment method again.'
           : 'Payment component failed to load. Refresh and try again.';
       });
+      closePaymentBridgeIfBlank(optionsArg.bridgeWindow || null);
       return false;
     }
+
+    const bridgeWindow = optionsArg.bridgeWindow || null;
 
     const options = buildPaymentOptions(selectedCheckout, payType, email);
     const localPayload = options._localPayload;
@@ -4541,7 +4634,7 @@
     };
 
     try {
-      callPaymentApi(options);
+      callPaymentApi(options, bridgeWindow);
       window.__lastGalaxyPayStatus = {
         state: 'called',
         options,
@@ -4565,6 +4658,7 @@
         time: new Date().toISOString()
       };
       console.error('[Galaxy Run Rivals] DoRequest failed:', error);
+      closePaymentBridgeIfBlank(bridgeWindow);
       // Do not show a browser popup here. Some payment SDKs may open/redirect and still throw a noisy sync error.
       // Keep the message inside the checkout modal so a successful payment jump is not interrupted.
       dom.checkoutStatus.textContent = `Payment did not open here. If a checkout page opened, please complete it there. Otherwise try again. (${message})`;
@@ -4673,8 +4767,11 @@
 
       const now = performance.now();
       const key = useBtn.dataset.useItem;
-      if (event && event.type === 'touchend') itemTouchAt = now;
-      if (event && event.type === 'click' && itemTouchAt && now - itemTouchAt < 700) return false;
+      if (event && event.type === 'touchend') {
+        itemTouchAt = now;
+        itemTouchKey = key;
+      }
+      if (event && event.type === 'click' && itemTouchAt && itemTouchKey === key && now - itemTouchAt < 700) return false;
       if (itemUseLastKey === key && itemUseLastAt && now - itemUseLastAt < 180) return false;
       itemUseLastKey = key;
       itemUseLastAt = now;
@@ -4697,8 +4794,13 @@
       checkoutPayLastType = String(payButton.dataset.checkoutPay || '');
       checkoutPayLastAt = now;
 
+      const payType = Number(payButton.dataset.checkoutPay);
+      const bridgeWindow = isMobilePaymentContext(event)
+        ? openPaymentBridge(payType, selectedCheckout && selectedCheckout.name)
+        : null;
+
       // Keep this call directly inside the touch/click handler so mobile browsers keep the navigation gesture.
-      return confirmCheckout(Number(payButton.dataset.checkoutPay));
+      return confirmCheckout(payType, { event, bridgeWindow });
     }
 
     document.addEventListener('click', (event) => {
@@ -4868,6 +4970,15 @@
       updateSettingsUI();
       audio.syncMusic();
     });
+    if (dom.flightSoundToggle) {
+      dom.flightSoundToggle.addEventListener('click', () => {
+        audio.click();
+        data.settings.flightSound = !data.settings.flightSound;
+        saveData();
+        updateSettingsUI();
+        audio.syncEngine();
+      });
+    }
     dom.sfxToggle.addEventListener('click', () => {
       data.settings.sfx = !data.settings.sfx;
       saveData();
@@ -5019,6 +5130,7 @@
       hasAudioContext: !!(window.AudioContext || window.webkitAudioContext),
       initialized: !!audio.ctx,
       musicOn: !!data.settings.music,
+      flightSoundOn: !!data.settings.flightSound,
       sfxOn: !!data.settings.sfx,
       musicActive: !!audio.music,
       engineActive: !!audio.engine,
@@ -5060,6 +5172,7 @@
       reviveArmed: !!game.reviveArmed,
       revivedThisRun: !!game.revivedThisRun,
       itemDockSignature,
+      itemTouchKey,
       itemDockHtmlLength: dom.itemDock ? dom.itemDock.innerHTML.length : 0
     };
   };
@@ -5074,6 +5187,7 @@
       lastStatus: window.__lastGalaxyPayStatus || null,
       lastError: window.__lastGalaxyPayError || null,
       touchState: { checkoutPayTouchAt, checkoutPayLastAt, checkoutPayLastType },
+      mobileBridgeSupported: typeof window.open === 'function',
       currentScreen,
       selectedCheckout
     };
@@ -5108,5 +5222,5 @@
     };
   };
   init();
-  setTimeout(() => primePaymentScripts('idle'), 1200);
+  setTimeout(() => primePaymentScripts('idle-fast'), 280);
 })();
