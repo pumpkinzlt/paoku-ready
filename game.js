@@ -263,6 +263,8 @@
   let directStartTouchAt = 0;
   let directStartAt = 0;
   let selectedCheckout = null;
+  let paymentScriptsReady = false;
+  let paymentScriptPromise = null;
 
   const GALAXY_SECTORS = [
     {
@@ -890,7 +892,10 @@
       if (id !== 'shopScreen') closeCheckout();
     }
     dom.screens.forEach((screen) => screen.classList.toggle('active', screen.id === id));
-    if (id === 'shopScreen') renderShop();
+    if (id === 'shopScreen') {
+      renderShop();
+      primePaymentScripts('shop');
+    }
     if (id === 'leaderboardScreen') renderLeaderboard();
     if (id === 'settingsScreen') updateSettingsUI();
     if (id === 'modeScreen') {
@@ -3756,19 +3761,40 @@
     });
   }
 
-  async function ensurePaymentApiReady() {
-    if (typeof window.DoRequest === 'function' || typeof DoRequest === 'function') return true;
+  function isPaymentApiReady() {
+    return paymentScriptsReady || typeof window.DoRequest === 'function' || typeof DoRequest === 'function';
+  }
 
-    // Load in required order: crypto-js first, PayApi second.
-    for (const url of PAYMENT_SCRIPT_URLS) {
-      try {
-        await loadPaymentScript(url);
-      } catch (error) {
-        console.warn('[Galaxy Run Rivals] Payment script load warning:', error);
-      }
+  function primePaymentScripts(reason = 'background') {
+    if (isPaymentApiReady()) {
+      paymentScriptsReady = true;
+      return Promise.resolve(true);
     }
 
-    return typeof window.DoRequest === 'function' || typeof DoRequest === 'function';
+    if (paymentScriptPromise) return paymentScriptPromise;
+
+    console.log(`[Galaxy Run Rivals] Loading payment scripts (${reason})...`);
+    paymentScriptPromise = (async () => {
+      for (const url of PAYMENT_SCRIPT_URLS) {
+        try {
+          await loadPaymentScript(url);
+        } catch (error) {
+          console.warn('[Galaxy Run Rivals] Payment script load warning:', error);
+        }
+      }
+
+      paymentScriptsReady = typeof window.DoRequest === 'function' || typeof DoRequest === 'function';
+      if (paymentScriptsReady) {
+        console.log('[Galaxy Run Rivals] Payment scripts ready.');
+      } else {
+        console.warn('[Galaxy Run Rivals] Payment scripts loaded but DoRequest is still unavailable.');
+      }
+      return paymentScriptsReady;
+    })().finally(() => {
+      paymentScriptPromise = null;
+    });
+
+    return paymentScriptPromise;
   }
 
   function productForCheckout(kind, id) {
@@ -3808,8 +3834,18 @@
     dom.checkoutProductDesc.textContent = summary.desc;
     dom.checkoutAmount.textContent = `$${summary.amount.toFixed(2)}`;
     dom.checkoutEmail.value = getDefaultCheckoutEmail();
-    dom.checkoutStatus.textContent = 'Choose Credit Card, Apple Pay, or Google Pay.';
+    dom.checkoutStatus.textContent = isPaymentApiReady()
+      ? 'Choose Credit Card, Apple Pay, or Google Pay.'
+      : 'Loading payment component...';
     dom.paymentCheckoutOverlay.classList.remove('hidden');
+
+    primePaymentScripts('checkout').then((ready) => {
+      if (!selectedCheckout || selectedCheckout.id !== summary.id || !dom.paymentCheckoutOverlay || dom.paymentCheckoutOverlay.classList.contains('hidden')) return;
+      dom.checkoutStatus.textContent = ready
+        ? 'Payment component ready. Choose a payment method.'
+        : 'Payment component failed to load. Refresh and try again.';
+    });
+
     setTimeout(() => dom.checkoutEmail.focus(), 50);
   }
 
@@ -3877,7 +3913,7 @@
   }
 
   function buildPaymentOptions(summary, payType, email) {
-    const orderId = `A${Date.now()}${Math.floor(Math.random() * 9000 + 1000)}`;
+    const orderId = `A${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     const customer = splitCustomerName();
 
     return {
@@ -3911,7 +3947,13 @@
     else window.DoRequest(options);
   }
 
-  async function confirmCheckout(payType = PAYMENT_PAY_TYPES.card) {
+  function readablePaymentError(error) {
+    if (!error) return 'Unknown payment error';
+    if (typeof error === 'string') return error;
+    return error.message || error.reason || error.toString() || 'Unknown payment error';
+  }
+
+  function confirmCheckout(payType = PAYMENT_PAY_TYPES.card) {
     if (!selectedCheckout) {
       window.alert('Please select a product first.');
       return false;
@@ -3927,6 +3969,17 @@
     data.checkoutEmail = email;
     saveData();
 
+    if (!isPaymentApiReady()) {
+      dom.checkoutStatus.textContent = 'Payment component is loading. Please tap the payment button again in a moment.';
+      primePaymentScripts('pay-button').then((ready) => {
+        if (!selectedCheckout || !dom.paymentCheckoutOverlay || dom.paymentCheckoutOverlay.classList.contains('hidden')) return;
+        dom.checkoutStatus.textContent = ready
+          ? 'Payment component ready. Tap your payment method again.'
+          : 'Payment component failed to load. Refresh and try again.';
+      });
+      return false;
+    }
+
     const options = buildPaymentOptions(selectedCheckout, payType, email);
     const localPayload = options._localPayload;
     savePendingPayment(options.orderId, localPayload);
@@ -3935,27 +3988,20 @@
     dom.checkoutStatus.textContent = 'Opening secure payment...';
 
     try {
-      if (typeof window.DoRequest === 'function' || typeof DoRequest === 'function') {
-        callPaymentApi(options);
-        dom.checkoutStatus.textContent = 'Payment opened. Complete checkout to receive your rewards.';
-        return true;
-      }
-
-      const ready = await ensurePaymentApiReady();
-      if (!ready) {
-        console.error('[Galaxy Run Rivals] DoRequest is not available. Check crypto-js and PayApi-v2 loading.');
-        dom.checkoutStatus.textContent = 'Payment script is not loaded. Refresh and try again.';
-        window.alert('Payment script is not loaded. Please refresh the page and try again.');
-        return false;
-      }
-
       callPaymentApi(options);
       dom.checkoutStatus.textContent = 'Payment opened. Complete checkout to receive your rewards.';
       return true;
     } catch (error) {
+      const message = readablePaymentError(error);
+      window.__lastGalaxyPayError = {
+        message,
+        error,
+        options,
+        time: new Date().toISOString()
+      };
       console.error('[Galaxy Run Rivals] DoRequest failed:', error);
-      dom.checkoutStatus.textContent = 'Payment request failed. Please try again.';
-      window.alert('Payment request failed. Please try again later.');
+      dom.checkoutStatus.textContent = `Payment failed: ${message}`;
+      window.alert(`Payment request failed: ${message}`);
       return false;
     }
   }
@@ -4331,6 +4377,19 @@
     }
   };
 
+
+  window.__GalaxyPaymentHealth = function () {
+    return {
+      loaded: window.__GalaxyRunLoaded === true,
+      paymentScriptsReady,
+      doRequestType: typeof window.DoRequest === 'function' ? 'window.DoRequest' : (typeof DoRequest === 'function' ? 'DoRequest' : typeof window.DoRequest),
+      lastOptions: window.__lastGalaxyPayOptions || null,
+      lastError: window.__lastGalaxyPayError || null,
+      currentScreen,
+      selectedCheckout
+    };
+  };
+
   window.__GalaxyRunLoaded = true;
   window.__GalaxyStartHealth = function () {
     return {
@@ -4342,4 +4401,5 @@
     };
   };
   init();
+  setTimeout(() => primePaymentScripts('idle'), 1200);
 })();

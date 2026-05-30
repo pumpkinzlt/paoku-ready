@@ -433,3 +433,13 @@ Verified flows:
 - Registered user can enter Mode Select and start Arena.
 - Shop coin recharge opens Secure Checkout.
 - Credit Card checkout builds the expected `DoRequest(options)` payload with `payTypes: 8004` and amount `0.99` for Starter Pack.
+
+
+## Payment Popup Gesture Fix
+
+- Payment scripts are preloaded in the background after game boot, on Shop open, and when the checkout modal opens.
+- The payment button no longer waits for script loading and then calls `DoRequest`; if scripts are not ready, it asks the player to tap again after the component is ready. This avoids browser popup blocking caused by lost user gesture.
+- `DoRequest(options)` is called synchronously when the payment API is ready.
+- Real `DoRequest` errors are shown in the checkout modal and stored at `window.__lastGalaxyPayError`.
+- `window.__GalaxyPaymentHealth()` returns payment loading status, last options, and last error for debugging.
+- Order IDs are shorter and alphanumeric-only, for example `AMIK3Z9AB12CD`.
