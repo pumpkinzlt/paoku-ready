@@ -505,3 +505,28 @@ Item hotkeys:
 - Mobile vertical movement is lighter and clamped to a safer visible area.
 - Mobile onboarding prompt is shorter, placed at the top, and no longer blocks the ship.
 - Debug: `window.__GalaxyMobileControlHealth()` shows player position, target, mobile bounds, and touch state.
+
+
+## Spaceship Audio Upgrade
+
+- Replaced car-like sound direction with spaceship audio:
+  - Low-frequency plasma engine hum while flying.
+  - Boost adds a short thruster whoosh and raises engine intensity.
+  - Coin pickup uses bright sci-fi energy chimes.
+  - Item activation uses an electronic power-up sweep.
+  - Collision uses shield/hull impact instead of a car crash style hit.
+  - Game over uses a ship power-down sound.
+- Background music is now a soft space drone/pad instead of a simple engine-like loop.
+- Audio is still generated with Web Audio API, no external audio files required.
+- Debug: `window.__GalaxyAudioHealth()` shows audio/music/engine status.
+
+
+## Mobile Payment Jump Fix
+
+- Payment buttons now support direct `touchend` handling on mobile, not only `click`.
+- Touch/click de-duplication prevents duplicate payment calls.
+- Payment scripts start warming on first touch/pointer gesture, plus Shop and Checkout open.
+- Checkout payment buttons are disabled until `DoRequest` is ready, so the first tap does not fail silently.
+- `DoRequest(options)` is called directly inside the touch/click handler to preserve the mobile browser navigation gesture.
+- If the payment SDK returns a URL-like result, the game follows it with `window.location.href`.
+- Debug: `window.__GalaxyPaymentHealth()` now includes last SDK return and mobile payment touch state.

@@ -274,6 +274,9 @@
   let selectedCheckout = null;
   let paymentScriptsReady = false;
   let paymentScriptPromise = null;
+  let checkoutPayTouchAt = 0;
+  let checkoutPayLastAt = 0;
+  let checkoutPayLastType = '';
   let lastStartClickAt = 0;
   let lastRestartClickAt = 0;
   let lastModeStartClickAt = 0;
@@ -836,17 +839,28 @@
   const audio = {
     ctx: null,
     music: null,
+    engine: null,
     gain: null,
+    sfxGain: null,
     started: false,
+    engineLevel: 0,
+    lastBoostWhooshAt: 0,
+
     init() {
       if (this.ctx) return;
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
       this.ctx = new AudioContext();
+
       this.gain = this.ctx.createGain();
-      this.gain.gain.value = 0.035;
+      this.gain.gain.value = 0.055;
       this.gain.connect(this.ctx.destination);
+
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.value = 0.72;
+      this.sfxGain.connect(this.ctx.destination);
     },
+
     unlock() {
       this.init();
       if (!this.ctx) return;
@@ -854,52 +868,263 @@
       if (!this.started && data.settings.music) this.startMusic();
       this.started = true;
     },
-    tone(freq, duration = 0.08, type = 'sine', volume = 0.08) {
+
+    now() {
+      return this.ctx ? this.ctx.currentTime : 0;
+    },
+
+    tone(freq, duration = 0.08, type = 'sine', volume = 0.08, destination = null) {
       if (!data.settings.sfx) return;
       this.init();
       if (!this.ctx) return;
+      const t = this.now();
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = type;
-      osc.frequency.value = freq;
-      gain.gain.value = volume;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
-      osc.start();
-      osc.stop(this.ctx.currentTime + duration);
+      gain.connect(destination || this.sfxGain || this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + duration + 0.03);
     },
-    click() { this.tone(520, 0.05, 'triangle', 0.045); },
-    coin() { this.tone(920, 0.08, 'sine', 0.065); setTimeout(() => this.tone(1180, 0.06, 'sine', 0.045), 45); },
-    score() { this.tone(660, 0.05, 'square', 0.035); },
-    skill() { this.tone(260, 0.10, 'sawtooth', 0.06); setTimeout(() => this.tone(620, 0.12, 'sawtooth', 0.045), 75); },
-    hit() { this.tone(90, 0.18, 'sawtooth', 0.09); },
-    over() { this.tone(180, 0.16, 'triangle', 0.08); setTimeout(() => this.tone(120, 0.22, 'triangle', 0.07), 120); },
+
+    sweep(from, to, duration = 0.22, type = 'sawtooth', volume = 0.055) {
+      if (!data.settings.sfx) return;
+      this.init();
+      if (!this.ctx) return;
+      const t = this.now();
+      const osc = this.ctx.createOscillator();
+      const filter = this.ctx.createBiquadFilter();
+      const gain = this.ctx.createGain();
+
+      osc.type = type;
+      osc.frequency.setValueAtTime(from, t);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(1, to), t + duration);
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(900, t);
+      filter.frequency.exponentialRampToValueAtTime(3600, t + duration * 0.75);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), t + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain || this.ctx.destination);
+      osc.start(t);
+      osc.stop(t + duration + 0.04);
+    },
+
+    noiseBurst(duration = 0.16, volume = 0.045, filterFreq = 1200, type = 'bandpass') {
+      if (!data.settings.sfx) return;
+      this.init();
+      if (!this.ctx) return;
+      const sampleRate = this.ctx.sampleRate || 44100;
+      const length = Math.max(1, Math.floor(sampleRate * duration));
+      const buffer = this.ctx.createBuffer(1, length, sampleRate);
+      const dataArr = buffer.getChannelData(0);
+      for (let i = 0; i < length; i += 1) {
+        dataArr[i] = (Math.random() * 2 - 1) * (1 - i / length);
+      }
+
+      const source = this.ctx.createBufferSource();
+      const filter = this.ctx.createBiquadFilter();
+      const gain = this.ctx.createGain();
+      const t = this.now();
+
+      source.buffer = buffer;
+      filter.type = type;
+      filter.frequency.setValueAtTime(filterFreq, t);
+      filter.Q.value = 0.8;
+      gain.gain.setValueAtTime(volume, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain || this.ctx.destination);
+      source.start(t);
+      source.stop(t + duration + 0.02);
+    },
+
+    click() {
+      // UI click: small holographic chirp, not a car button click.
+      this.tone(720, 0.045, 'triangle', 0.032);
+      setTimeout(() => this.tone(1080, 0.035, 'sine', 0.018), 24);
+    },
+
+    coin() {
+      // Star coin pickup: bright energy sparkle.
+      this.tone(1240, 0.055, 'sine', 0.045);
+      setTimeout(() => this.tone(1760, 0.045, 'triangle', 0.035), 38);
+      setTimeout(() => this.tone(2320, 0.035, 'sine', 0.022), 72);
+    },
+
+    score() {
+      // Score milestone: soft mission ping.
+      this.tone(660, 0.045, 'triangle', 0.026);
+      setTimeout(() => this.tone(990, 0.055, 'sine', 0.022), 55);
+    },
+
+    skill() {
+      // Generic item / ability: sci-fi power-up sweep.
+      this.sweep(180, 920, 0.20, 'sawtooth', 0.040);
+      setTimeout(() => this.tone(1320, 0.09, 'triangle', 0.026), 90);
+    },
+
+    boost() {
+      // Short plasma-thruster lift, used when Speed Boost starts.
+      const now = performance.now();
+      if (now - this.lastBoostWhooshAt < 500) return;
+      this.lastBoostWhooshAt = now;
+      this.sweep(95, 360, 0.28, 'sawtooth', 0.052);
+      this.noiseBurst(0.20, 0.030, 820, 'lowpass');
+    },
+
+    hit() {
+      // Shield / hull impact, less like a car crash.
+      this.tone(72, 0.16, 'sawtooth', 0.060);
+      setTimeout(() => this.tone(185, 0.10, 'square', 0.035), 35);
+      this.noiseBurst(0.14, 0.040, 1550, 'bandpass');
+    },
+
+    over() {
+      // Power-down sequence.
+      this.sweep(240, 58, 0.34, 'triangle', 0.055);
+      setTimeout(() => this.noiseBurst(0.22, 0.026, 540, 'lowpass'), 80);
+      this.setEngine(false);
+    },
+
     startMusic() {
       this.init();
       if (!this.ctx || this.music) return;
-      const osc = this.ctx.createOscillator();
+      const t = this.now();
+
+      const padA = this.ctx.createOscillator();
+      const padB = this.ctx.createOscillator();
+      const shimmer = this.ctx.createOscillator();
       const lfo = this.ctx.createOscillator();
       const lfoGain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = 112;
-      lfo.frequency.value = 0.18;
-      lfoGain.gain.value = 16;
+      const filter = this.ctx.createBiquadFilter();
+      const padGain = this.ctx.createGain();
+
+      padA.type = 'sine';
+      padB.type = 'triangle';
+      shimmer.type = 'sine';
+      padA.frequency.setValueAtTime(64, t);
+      padB.frequency.setValueAtTime(96, t);
+      shimmer.frequency.setValueAtTime(192, t);
+
+      lfo.type = 'sine';
+      lfo.frequency.setValueAtTime(0.055, t);
+      lfoGain.gain.setValueAtTime(9, t);
       lfo.connect(lfoGain);
-      lfoGain.connect(osc.frequency);
-      osc.connect(this.gain);
-      osc.start();
-      lfo.start();
-      this.music = { osc, lfo };
+      lfoGain.connect(padA.frequency);
+      lfoGain.connect(padB.frequency);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(680, t);
+      filter.Q.value = 0.45;
+
+      padGain.gain.setValueAtTime(0.0001, t);
+      padGain.gain.exponentialRampToValueAtTime(0.42, t + 0.8);
+
+      padA.connect(filter);
+      padB.connect(filter);
+      shimmer.connect(filter);
+      filter.connect(padGain);
+      padGain.connect(this.gain);
+
+      padA.start(t);
+      padB.start(t);
+      shimmer.start(t);
+      lfo.start(t);
+
+      this.music = { padA, padB, shimmer, lfo, filter, padGain };
+      this.startEngine();
     },
+
+    startEngine() {
+      if (!this.ctx || this.engine) return;
+      const t = this.now();
+      const low = this.ctx.createOscillator();
+      const mid = this.ctx.createOscillator();
+      const lfo = this.ctx.createOscillator();
+      const lfoGain = this.ctx.createGain();
+      const filter = this.ctx.createBiquadFilter();
+      const gain = this.ctx.createGain();
+
+      low.type = 'sawtooth';
+      mid.type = 'triangle';
+      low.frequency.setValueAtTime(52, t);
+      mid.frequency.setValueAtTime(104, t);
+      lfo.frequency.setValueAtTime(5.5, t);
+      lfoGain.gain.setValueAtTime(2.2, t);
+      lfo.connect(lfoGain);
+      lfoGain.connect(low.frequency);
+      lfoGain.connect(mid.frequency);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(260, t);
+      filter.Q.value = 0.7;
+      gain.gain.setValueAtTime(0.0001, t);
+
+      low.connect(filter);
+      mid.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.gain);
+
+      low.start(t);
+      mid.start(t);
+      lfo.start(t);
+      this.engine = { low, mid, lfo, lfoGain, filter, gain };
+    },
+
+    setEngine(active, boost = false) {
+      if (!data.settings.music) return;
+      this.init();
+      if (!this.ctx) return;
+      if (!this.music) this.startMusic();
+      if (!this.engine) this.startEngine();
+      if (!this.engine) return;
+
+      const t = this.now();
+      const target = active ? (boost ? 0.30 : 0.17) : 0.0001;
+      const freq = active ? (boost ? 520 : 320) : 180;
+      this.engine.gain.gain.cancelScheduledValues(t);
+      this.engine.filter.frequency.cancelScheduledValues(t);
+      this.engine.gain.gain.setTargetAtTime(target, t, 0.18);
+      this.engine.filter.frequency.setTargetAtTime(freq, t, 0.22);
+      this.engineLevel = target;
+    },
+
+    updateEngine(boost = false) {
+      if (!this.engine || !data.settings.music) return;
+      const active = currentScreen === 'gameScreen' && game.running && !game.paused && !game.over;
+      this.setEngine(active, active && boost);
+    },
+
     stopMusic() {
+      this.setEngine(false);
+      if (this.engine) {
+        try {
+          this.engine.low.stop();
+          this.engine.mid.stop();
+          this.engine.lfo.stop();
+        } catch (error) {}
+        this.engine = null;
+      }
       if (!this.music) return;
       try {
-        this.music.osc.stop();
+        this.music.padA.stop();
+        this.music.padB.stop();
+        this.music.shimmer.stop();
         this.music.lfo.stop();
       } catch (error) {}
       this.music = null;
     },
+
     syncMusic() {
       if (data.settings.music) this.startMusic();
       else this.stopMusic();
@@ -910,9 +1135,12 @@
     if (!dom.screens.some((screen) => screen.id === id)) id = 'startScreen';
     currentScreen = id;
     if (id !== 'gameScreen') {
+      audio.setEngine(false);
       setMobileItemsOpen(false);
       hideOnboardingToast(false);
       if (id !== 'shopScreen') closeCheckout();
+    } else {
+      audio.updateEngine(game.active && game.active.speedBoost > 0);
     }
     dom.screens.forEach((screen) => screen.classList.toggle('active', screen.id === id));
     if (id === 'shopScreen') {
@@ -1401,7 +1629,7 @@
   function doLaunchRun(mode = selectedMode, level = selectedLevel, options = {}) {
     if (!options.skipLock && !canLaunchNow()) return false;
     try {
-      try { audio.unlock(); } catch (error) {}
+      try { audio.unlock(); audio.setEngine(true, false); } catch (error) {}
       const prepared = prepareRunData(mode, level);
 
       hardResetLaunchState();
@@ -1535,6 +1763,7 @@
     audio.click();
     game.paused = typeof force === 'boolean' ? force : !game.paused;
     dom.pauseOverlay.classList.toggle('hidden', !game.paused);
+    audio.setEngine(!game.paused, game.active && game.active.speedBoost > 0);
     if (!game.paused) game.lastTime = performance.now();
   }
 
@@ -1925,6 +2154,7 @@
     if (boostActive && !game.boostActiveLast) {
       game.boostPulse = 1;
       game.shake = Math.max(game.shake, 3.5);
+      audio.boost();
     }
     if (!boostActive && game.boostActiveLast) {
       game.brakePulse = 1;
@@ -1937,6 +2167,7 @@
     game.speedFx = lerp(game.speedFx || 1, targetFx, clamp(dt * response, 0, 1));
     game.boostPulse = Math.max(0, game.boostPulse - dt * 2.7);
     game.brakePulse = Math.max(0, game.brakePulse - dt * 1.9);
+    audio.updateEngine(boostActive);
   }
 
 
@@ -2323,6 +2554,7 @@
     } else if (key === 'speedBoost') {
       game.active.speedBoost = boostDuration(item.duration);
       game.boostPulse = 1;
+      audio.boost();
       game.speedFx = Math.max(game.speedFx || 1, boostPower());
     } else if (key === 'bomb') {
       game.active.bomb = 0.2;
@@ -2365,6 +2597,7 @@
     game.active.speedBoost = boostDuration(2.1);
     game.cooldowns.sprint = 9;
     game.boostPulse = 1;
+    audio.boost();
     game.speedFx = Math.max(game.speedFx || 1, boostPower());
     addWave(game.player.x, game.player.y, '#ffd166');
     itemStatusMessage('Sprint!', '#ffd166');
@@ -4097,6 +4330,24 @@
     };
   }
 
+  function setCheckoutPayButtonsEnabled(enabled) {
+    document.querySelectorAll('[data-checkout-pay]').forEach((button) => {
+      button.disabled = !enabled;
+      button.classList.toggle('disabled', !enabled);
+      button.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+    });
+  }
+
+  function warmPaymentScriptsFromGesture(reason = 'gesture') {
+    // Mobile browsers are stricter about popup/redirect gestures.
+    // Start loading on the first real user gesture, but never block the game.
+    try {
+      primePaymentScripts(reason);
+    } catch (error) {
+      console.warn('[Galaxy Run Rivals] Payment warmup skipped:', error);
+    }
+  }
+
   function openCheckout(kind, id) {
     const summary = productForCheckout(kind, id);
     if (!summary) return;
@@ -4107,13 +4358,16 @@
     dom.checkoutProductDesc.textContent = summary.desc;
     dom.checkoutAmount.textContent = `$${summary.amount.toFixed(2)}`;
     dom.checkoutEmail.value = getDefaultCheckoutEmail();
-    dom.checkoutStatus.textContent = isPaymentApiReady()
-      ? 'Choose Credit Card, Apple Pay, or Google Pay.'
+    const readyNow = isPaymentApiReady();
+    setCheckoutPayButtonsEnabled(readyNow);
+    dom.checkoutStatus.textContent = readyNow
+      ? 'Payment component ready. Choose a payment method.'
       : 'Loading payment component...';
     dom.paymentCheckoutOverlay.classList.remove('hidden');
 
     primePaymentScripts('checkout').then((ready) => {
       if (!selectedCheckout || selectedCheckout.id !== summary.id || !dom.paymentCheckoutOverlay || dom.paymentCheckoutOverlay.classList.contains('hidden')) return;
+      setCheckoutPayButtonsEnabled(ready);
       dom.checkoutStatus.textContent = ready
         ? 'Payment component ready. Choose a payment method.'
         : 'Payment component failed to load. Refresh and try again.';
@@ -4124,6 +4378,7 @@
 
   function closeCheckout() {
     selectedCheckout = null;
+    setCheckoutPayButtonsEnabled(false);
     if (dom.paymentCheckoutOverlay) dom.paymentCheckoutOverlay.classList.add('hidden');
   }
 
@@ -4213,11 +4468,28 @@
     };
   }
 
+  function resolvePaymentRedirect(result) {
+    if (!result) return '';
+    if (typeof result === 'string' && /^https?:\/\//i.test(result)) return result;
+    if (typeof result === 'object') {
+      return result.url || result.payUrl || result.paymentUrl || result.redirectUrl || result.checkoutUrl || '';
+    }
+    return '';
+  }
+
   function callPaymentApi(options) {
     window.__lastGalaxyPayOptions = options;
     console.log('[Galaxy Run Rivals] Calling DoRequest(options):', options);
-    if (typeof DoRequest === 'function') DoRequest(options);
-    else window.DoRequest(options);
+
+    const result = typeof DoRequest === 'function' ? DoRequest(options) : window.DoRequest(options);
+    window.__lastGalaxyPayReturn = result || null;
+
+    const redirectUrl = resolvePaymentRedirect(result);
+    if (redirectUrl) {
+      window.location.href = redirectUrl;
+    }
+
+    return result;
   }
 
   function readablePaymentError(error) {
@@ -4243,9 +4515,11 @@
     saveData();
 
     if (!isPaymentApiReady()) {
-      dom.checkoutStatus.textContent = 'Payment component is loading. Please tap the payment button again in a moment.';
+      setCheckoutPayButtonsEnabled(false);
+      dom.checkoutStatus.textContent = 'Payment component is loading. Please wait, then tap your payment method again.';
       primePaymentScripts('pay-button').then((ready) => {
         if (!selectedCheckout || !dom.paymentCheckoutOverlay || dom.paymentCheckoutOverlay.classList.contains('hidden')) return;
+        setCheckoutPayButtonsEnabled(ready);
         dom.checkoutStatus.textContent = ready
           ? 'Payment component ready. Tap your payment method again.'
           : 'Payment component failed to load. Refresh and try again.';
@@ -4410,6 +4684,23 @@
       return used;
     }
 
+    function handleCheckoutPayButton(payButton, event) {
+      if (!payButton) return false;
+      if (event && event.preventDefault) event.preventDefault();
+      if (event && event.stopPropagation) event.stopPropagation();
+
+      const now = performance.now();
+      if (event && event.type === 'touchend') checkoutPayTouchAt = now;
+      if (event && event.type === 'click' && checkoutPayTouchAt && now - checkoutPayTouchAt < 750) return false;
+      if (checkoutPayLastType === String(payButton.dataset.checkoutPay) && checkoutPayLastAt && now - checkoutPayLastAt < 650) return false;
+
+      checkoutPayLastType = String(payButton.dataset.checkoutPay || '');
+      checkoutPayLastAt = now;
+
+      // Keep this call directly inside the touch/click handler so mobile browsers keep the navigation gesture.
+      return confirmCheckout(Number(payButton.dataset.checkoutPay));
+    }
+
     document.addEventListener('click', (event) => {
       if (event.target.closest('button')) audio.unlock();
     }, { passive: true });
@@ -4433,9 +4724,14 @@
     }
 
     document.addEventListener('pointerdown', (event) => {
+      warmPaymentScriptsFromGesture('pointerdown');
       const button = event.target.closest('button');
       if (!button) return;
       addButtonFeedback(button, event);
+    }, { passive: true });
+
+    document.addEventListener('touchstart', () => {
+      warmPaymentScriptsFromGesture('touchstart');
     }, { passive: true });
 
     document.addEventListener('pointerup', (event) => {
@@ -4506,7 +4802,7 @@
       const packBtn = event.target.closest('[data-buy-pack]');
       if (packBtn) buyCoinPack(packBtn.dataset.buyPack);
       const checkoutPayBtn = event.target.closest('[data-checkout-pay]');
-      if (checkoutPayBtn) confirmCheckout(Number(checkoutPayBtn.dataset.checkoutPay));
+      if (checkoutPayBtn) handleCheckoutPayButton(checkoutPayBtn, event);
       const itemBtn = event.target.closest('[data-buy-item]');
       if (itemBtn) buyItem(itemBtn.dataset.buyItem);
       const upgradeBtn = event.target.closest('[data-buy-upgrade]');
@@ -4524,6 +4820,11 @@
     });
 
     document.addEventListener('touchend', (event) => {
+      const checkoutPayBtn = event.target.closest('[data-checkout-pay]');
+      if (checkoutPayBtn) {
+        handleCheckoutPayButton(checkoutPayBtn, event);
+        return;
+      }
       const useBtn = event.target.closest('[data-use-item]');
       if (useBtn) handleItemUseButton(useBtn, event);
     }, { passive: false });
@@ -4713,6 +5014,22 @@
   };
 
 
+  window.__GalaxyAudioHealth = function () {
+    return {
+      hasAudioContext: !!(window.AudioContext || window.webkitAudioContext),
+      initialized: !!audio.ctx,
+      musicOn: !!data.settings.music,
+      sfxOn: !!data.settings.sfx,
+      musicActive: !!audio.music,
+      engineActive: !!audio.engine,
+      engineLevel: audio.engineLevel || 0,
+      screen: currentScreen,
+      running: !!game.running,
+      paused: !!game.paused,
+      boostActive: !!(game.active && game.active.speedBoost > 0)
+    };
+  };
+
   window.__GalaxyMobileControlHealth = function () {
     return {
       isMobile: isMobileLayout(),
@@ -4753,8 +5070,10 @@
       paymentScriptsReady,
       doRequestType: typeof window.DoRequest === 'function' ? 'window.DoRequest' : (typeof DoRequest === 'function' ? 'DoRequest' : typeof window.DoRequest),
       lastOptions: window.__lastGalaxyPayOptions || null,
+      lastReturn: window.__lastGalaxyPayReturn || null,
       lastStatus: window.__lastGalaxyPayStatus || null,
       lastError: window.__lastGalaxyPayError || null,
+      touchState: { checkoutPayTouchAt, checkoutPayLastAt, checkoutPayLastType },
       currentScreen,
       selectedCheckout
     };
