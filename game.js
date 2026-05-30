@@ -287,6 +287,7 @@
   let itemTouchAt = 0;
   let itemUseLastAt = 0;
   let itemUseLastKey = '';
+  let mobileDragStart = null;
 
   const GALAXY_SECTORS = [
     {
@@ -1067,12 +1068,13 @@
       this.lastArenaRank = 6;
       this.arenaRankFlash = 0;
       this.nextScoreSfx = 500;
+      const startY = mobileShipStartY();
       this.player = {
         x: W / 2,
-        y: H * 0.75,
+        y: startY,
         r: clamp(Math.min(W, H) * 0.035, 18, 31),
         targetX: W / 2,
-        targetY: H * 0.75,
+        targetY: startY,
         skin: startSkin,
         tilt: 0,
         turn: 0,
@@ -1112,6 +1114,7 @@
     game.over = false;
     game.keys = {};
     game.pointerActive = false;
+    mobileDragStart = null;
     game.targetX = 0;
     game.targetY = 0;
     game.boostPulse = 0;
@@ -1203,7 +1206,7 @@
     if (mobile) {
       dom.onboardingIcon.textContent = '☝️';
       dom.onboardingTitle.textContent = 'Drag to steer';
-      dom.onboardingText.textContent = 'Move your finger anywhere on the game screen. Tap BOOST on the right and use quick items on the left.';
+      dom.onboardingText.textContent = 'Drag left or right to steer. Your ship stays above your finger so you can see it clearly.';
     } else {
       dom.onboardingIcon.textContent = '⌨️';
       dom.onboardingTitle.textContent = 'Dodge and boost';
@@ -1212,7 +1215,7 @@
 
     dom.onboardingToast.classList.remove('hidden');
     if (onboardingTimer) clearTimeout(onboardingTimer);
-    onboardingTimer = setTimeout(() => hideOnboardingToast(false), mobile ? 2600 : 2400);
+    onboardingTimer = setTimeout(() => hideOnboardingToast(false), mobile ? 1600 : 2400);
   }
 
   function updateGameOverGoalCard(finalScore) {
@@ -1966,32 +1969,35 @@
       pointerDX = game.targetX - p.x;
       pointerDY = game.targetY - p.y;
 
-      // Spring-follow control: responsive, but not teleport-like.
-      const dead = Math.max(6, p.r * 0.22);
+      // Mobile controls should feel like dragging the ship, not chasing a distant tap point.
+      const mobile = isMobileLayout();
+      const dead = mobile ? 2 : Math.max(6, p.r * 0.22);
       const dx = Math.abs(pointerDX) < dead ? 0 : pointerDX;
       const dy = Math.abs(pointerDY) < dead ? 0 : pointerDY;
-      targetVx = clamp(dx * 5.9, -maxSpeedX, maxSpeedX);
-      targetVy = clamp(dy * 4.7, -maxSpeedY, maxSpeedY);
+      targetVx = clamp(dx * (mobile ? 10.8 : 5.9), -maxSpeedX * (mobile ? 1.22 : 1), maxSpeedX * (mobile ? 1.22 : 1));
+      targetVy = clamp(dy * (mobile ? 7.2 : 4.7), -maxSpeedY * (mobile ? 0.88 : 1), maxSpeedY * (mobile ? 0.88 : 1));
     } else if (ax || ay) {
       const len = Math.hypot(ax, ay) || 1;
       targetVx = (ax / len) * maxSpeedX;
       targetVy = (ay / len) * maxSpeedY;
     } else {
-      // Softly return to a comfortable lower-lane cruising position.
-      const cruiseY = H * 0.75;
+      // Softly return to a visible cruising position that is not hidden behind mobile UI.
+      const cruiseY = mobileShipStartY();
       targetVx = 0;
-      targetVy = clamp((cruiseY - p.y) * 2.2, -maxSpeedY * 0.42, maxSpeedY * 0.42);
+      targetVy = clamp((cruiseY - p.y) * (isMobileLayout() ? 3.0 : 2.2), -maxSpeedY * 0.42, maxSpeedY * 0.42);
     }
 
-    p.controlVx = lerp(p.controlVx || 0, targetVx, clamp(dt * (targetVx ? accel : release), 0, 1));
-    p.controlVy = lerp(p.controlVy || 0, targetVy, clamp(dt * (targetVy ? accel : release), 0, 1));
+    const mobileResponse = isMobileLayout() && game.pointerActive;
+    p.controlVx = lerp(p.controlVx || 0, targetVx, clamp(dt * (mobileResponse ? 18.5 : (targetVx ? accel : release)), 0, 1));
+    p.controlVy = lerp(p.controlVy || 0, targetVy, clamp(dt * (mobileResponse ? 13.5 : (targetVy ? accel : release)), 0, 1));
 
     p.x += p.controlVx * dt;
     p.y += p.controlVy * dt;
 
     const margin = p.r + 12;
     p.x = clamp(p.x, roadLeft() + margin, roadRight() - margin);
-    p.y = clamp(p.y, H * 0.35, H - p.r - 24);
+    const bounds = mobileControlBounds();
+    p.y = clamp(p.y, bounds.top, bounds.bottom);
 
     // Prevent sticky edge jitter.
     if (p.x <= roadLeft() + margin + 1 && p.controlVx < 0) p.controlVx *= 0.25;
@@ -2443,6 +2449,43 @@
 
   function isMobileLayout() {
     return document.body.classList.contains('is-mobile') || window.innerWidth <= 820 || window.innerHeight <= 560;
+  }
+
+  function mobileShipStartY() {
+    // Keep the ship above the bottom item dock / boost button on mobile.
+    if (!isMobileLayout()) return H * 0.75;
+    const landscape = window.innerWidth > window.innerHeight;
+    return clamp(H * (landscape ? 0.62 : 0.60), H * 0.46, H - 180);
+  }
+
+  function mobileTouchShipOffset() {
+    // Finger is below the ship, so the player can see the ship while dragging.
+    if (!isMobileLayout()) return 0;
+    return clamp(H * 0.15, 72, 132);
+  }
+
+  function mobileControlBounds() {
+    const marginX = (game.player?.r || 24) + 16;
+    const top = isMobileLayout() ? H * 0.35 : H * 0.35;
+    const bottomSafe = isMobileLayout()
+      ? Math.min(H - 132, H - ((game.player?.r || 24) + 104))
+      : H - ((game.player?.r || 24) + 24);
+    return {
+      left: roadLeft() + marginX,
+      right: roadRight() - marginX,
+      top,
+      bottom: Math.max(top + 40, bottomSafe)
+    };
+  }
+
+  function setPlayerTarget(x, y) {
+    const bounds = mobileControlBounds();
+    game.targetX = clamp(x, bounds.left, bounds.right);
+    game.targetY = clamp(y, bounds.top, bounds.bottom);
+    if (game.player) {
+      game.player.targetX = game.targetX;
+      game.player.targetY = game.targetY;
+    }
   }
 
   function setMobileItemsOpen(open) {
@@ -4563,24 +4606,46 @@
 
     dom.canvas.addEventListener('pointerdown', (event) => {
       if (event && event.preventDefault) event.preventDefault();
-      if (!game.running || game.paused || game.over) return;
+      if (!game.running || game.paused || game.over || !game.player) return;
       game.pointerActive = true;
       const p = screenPoint(event);
-      game.targetX = clamp(p.x, roadLeft() + 42, roadRight() - 42);
-      game.targetY = clamp(p.y, H * 0.35, H - 76);
+      const mobile = isMobileLayout() || event.pointerType === 'touch';
+      if (mobile) {
+        mobileDragStart = {
+          pointerX: p.x,
+          pointerY: p.y,
+          shipX: game.player.x,
+          shipY: game.player.y
+        };
+        setPlayerTarget(game.player.x, game.player.y);
+      } else {
+        setPlayerTarget(p.x, p.y);
+      }
       dom.canvas.setPointerCapture?.(event.pointerId);
     });
     dom.canvas.addEventListener('pointermove', (event) => {
       if (event && event.preventDefault) event.preventDefault();
-      if (!game.pointerActive || !game.running || game.paused || game.over) return;
+      if (!game.pointerActive || !game.running || game.paused || game.over || !game.player) return;
       const p = screenPoint(event);
-      game.targetX = clamp(p.x, roadLeft() + 36, roadRight() - 36);
-      game.targetY = clamp(p.y, H * 0.34, H - 70);
+      const mobile = isMobileLayout() || event.pointerType === 'touch';
+      if (mobile && mobileDragStart) {
+        const dx = p.x - mobileDragStart.pointerX;
+        const dy = p.y - mobileDragStart.pointerY;
+        setPlayerTarget(
+          mobileDragStart.shipX + dx * 1.12,
+          mobileDragStart.shipY + dy * 0.62
+        );
+      } else if (mobile) {
+        setPlayerTarget(p.x, p.y - mobileTouchShipOffset());
+      } else {
+        setPlayerTarget(p.x, p.y);
+      }
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((type) => {
       dom.canvas.addEventListener(type, (event) => {
         if (event && event.preventDefault) event.preventDefault();
         game.pointerActive = false;
+        mobileDragStart = null;
       });
     });
   }
@@ -4647,6 +4712,24 @@
     }
   };
 
+
+  window.__GalaxyMobileControlHealth = function () {
+    return {
+      isMobile: isMobileLayout(),
+      screen: currentScreen,
+      player: game.player ? {
+        x: Math.round(game.player.x),
+        y: Math.round(game.player.y),
+        targetX: Math.round(game.targetX || game.player.targetX || 0),
+        targetY: Math.round(game.targetY || game.player.targetY || 0)
+      } : null,
+      bounds: mobileControlBounds(),
+      pointerActive: !!game.pointerActive,
+      mobileDragStart,
+      itemDockVisible: !!dom.itemDock,
+      onboardingHidden: dom.onboardingToast ? dom.onboardingToast.classList.contains('hidden') : null
+    };
+  };
 
   window.__GalaxyItemHealth = function () {
     return {

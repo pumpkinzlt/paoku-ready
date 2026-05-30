@@ -495,3 +495,13 @@ Item hotkeys:
 - 6 = Revive
 - Space = Speed Boost / free Sprint
 - Debug: `window.__GalaxyItemHealth()` shows item stock, active timers, cooldowns, and dock state.
+
+
+## Mobile Visibility and Drag Control Fix
+
+- Moved the starting ship position upward on mobile so it is not hidden by the item dock, boost button, or onboarding prompt.
+- Reworked mobile touch control from absolute tap-chase to relative drag.
+- Ship now follows the finger movement with a small visibility offset, so the finger does not cover the ship.
+- Mobile vertical movement is lighter and clamped to a safer visible area.
+- Mobile onboarding prompt is shorter, placed at the top, and no longer blocks the ship.
+- Debug: `window.__GalaxyMobileControlHealth()` shows player position, target, mobile bounds, and touch state.
