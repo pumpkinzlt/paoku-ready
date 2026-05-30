@@ -1449,8 +1449,10 @@
     if (mobile) {
       dom.onboardingIcon.textContent = '☝️';
       dom.onboardingTitle.textContent = 'Drag to steer';
-      dom.onboardingText.textContent = 'Drag left or right to steer. Your ship stays above your finger so you can see it clearly.';
+      dom.onboardingText.textContent = 'Ship stays above your finger.';
+      dom.onboardingToast.classList.add('mobile-compact');
     } else {
+      dom.onboardingToast.classList.remove('mobile-compact');
       dom.onboardingIcon.textContent = '⌨️';
       dom.onboardingTitle.textContent = 'Dodge and boost';
       dom.onboardingText.textContent = 'Use WASD / Arrow Keys to move. Press Space to Boost. Clean Dodge gives bonus score.';
@@ -1458,7 +1460,7 @@
 
     dom.onboardingToast.classList.remove('hidden');
     if (onboardingTimer) clearTimeout(onboardingTimer);
-    onboardingTimer = setTimeout(() => hideOnboardingToast(false), mobile ? 1600 : 2400);
+    onboardingTimer = setTimeout(() => hideOnboardingToast(false), mobile ? 950 : 2400);
   }
 
   function updateGameOverGoalCard(finalScore) {
@@ -1795,6 +1797,33 @@
     return clamp(stars, 0, 3);
   }
 
+  function ensureGameOverActions() {
+    if (!dom.gameOverOverlay) return;
+    const modal = dom.gameOverOverlay.querySelector('.gameover-modal');
+    if (!modal) return;
+
+    let actions = modal.querySelector('.gameover-actions');
+    if (!actions) {
+      actions = document.createElement('div');
+      actions.className = 'gameover-actions';
+      modal.appendChild(actions);
+    }
+
+    if (dom.restartBtn) {
+      dom.restartBtn.classList.remove('hidden');
+      dom.restartBtn.style.display = '';
+      dom.restartBtn.textContent = 'Restart';
+      if (!actions.contains(dom.restartBtn)) actions.appendChild(dom.restartBtn);
+    }
+
+    if (dom.homeBtn) {
+      dom.homeBtn.classList.remove('hidden');
+      dom.homeBtn.style.display = '';
+      dom.homeBtn.textContent = 'Home';
+      if (!actions.contains(dom.homeBtn)) actions.appendChild(dom.homeBtn);
+    }
+  }
+
   function endGame(reason = 'crash') {
     if (game.over) return;
     audio.over();
@@ -1831,6 +1860,7 @@
     dom.overStars.textContent = stars === '—' ? '—' : '★'.repeat(stars) + '☆'.repeat(3 - stars);
     updateGameOverGoalCard(finalScore);
     updateContinueCard(finalScore, rewardText);
+    ensureGameOverActions();
     hideOnboardingToast(false);
     dom.gameOverOverlay.classList.remove('hidden');
   }
@@ -5142,6 +5172,7 @@
       if (dom.canvas) dom.canvas.style.touchAction = 'none';
       resizeCanvas();
       setupEvents();
+      ensureGameOverActions();
       if (!hasActiveAccount()) {
         currentUserId = '';
         try { localStorage.removeItem(SESSION_KEY); } catch (error) {}
@@ -5163,6 +5194,7 @@
         if (dom.canvas) dom.canvas.style.touchAction = 'none';
         resizeCanvas();
         setupEvents();
+        ensureGameOverActions();
         syncLoadedDataToUI();
         handlePaymentReturn();
         game.resetRuntime();
@@ -5199,6 +5231,22 @@
     }
   };
 
+
+  window.__GalaxyMobileUIHealth = function () {
+    const actions = dom.gameOverOverlay ? dom.gameOverOverlay.querySelector('.gameover-actions') : null;
+    return {
+      isMobile: isMobileLayout(),
+      onboardingHidden: dom.onboardingToast ? dom.onboardingToast.classList.contains('hidden') : null,
+      onboardingCompact: dom.onboardingToast ? dom.onboardingToast.classList.contains('mobile-compact') : null,
+      gameOverHidden: dom.gameOverOverlay ? dom.gameOverOverlay.classList.contains('hidden') : null,
+      hasRestartButton: !!dom.restartBtn,
+      hasHomeButton: !!dom.homeBtn,
+      restartVisible: !!dom.restartBtn && dom.restartBtn.style.display !== 'none' && !dom.restartBtn.classList.contains('hidden'),
+      homeVisible: !!dom.homeBtn && dom.homeBtn.style.display !== 'none' && !dom.homeBtn.classList.contains('hidden'),
+      actionsChildCount: actions ? actions.children.length : 0,
+      actionsText: actions ? Array.from(actions.children).map((el) => el.textContent.trim()).join(' | ') : ''
+    };
+  };
 
   window.__GalaxyAudioHealth = function () {
     return {

@@ -595,3 +595,11 @@ Payment:
   - `lastBypass`
   - `lastSdkSource`
   - `lastFallback`
+
+
+## Mobile UI Detail Polish
+
+- Mobile onboarding hint is now a compact, non-blocking top-left pill and auto-hides faster.
+- Game Over modal now explicitly ensures both Restart and Home buttons exist and are visible.
+- Mobile Game Over layout is more compact and scrollable, with sticky bottom actions.
+- Added `window.__GalaxyMobileUIHealth()` for checking onboarding and Game Over button visibility.
