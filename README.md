@@ -464,3 +464,12 @@ Verified flows:
 - First run now seeds a safe opening coin line and distant obstacle so the screen immediately feels alive.
 - Runtime dt is clamped and repaired if the first frame receives a zero/invalid timestamp.
 - `window.__GalaxyStartHealth()` now reports loop status, score, distance, speed, loop errors, obstacle count, and coin count.
+
+
+## Payment Alert Flow Polish
+
+- After `DoRequest(options)` is called successfully, the game no longer shows any failure alert.
+- If `DoRequest` throws a synchronous SDK error, the game no longer interrupts the player with `window.alert`.
+- Payment errors are shown inline in the checkout modal and stored in `window.__lastGalaxyPayError`.
+- The last payment call state is stored in `window.__lastGalaxyPayStatus`.
+- This prevents a confusing case where the payment page opens but the game still shows a browser failure prompt.

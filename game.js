@@ -4069,7 +4069,7 @@
 
   function confirmCheckout(payType = PAYMENT_PAY_TYPES.card) {
     if (!selectedCheckout) {
-      window.alert('Please select a product first.');
+      dom.checkoutStatus.textContent = 'Please select a product first.';
       return false;
     }
 
@@ -4100,10 +4100,22 @@
     delete options._localPayload;
 
     dom.checkoutStatus.textContent = 'Opening secure payment...';
+    window.__lastGalaxyPayError = null;
+    window.__lastGalaxyPayStatus = {
+      state: 'calling',
+      options,
+      time: new Date().toISOString()
+    };
 
     try {
       callPaymentApi(options);
+      window.__lastGalaxyPayStatus = {
+        state: 'called',
+        options,
+        time: new Date().toISOString()
+      };
       dom.checkoutStatus.textContent = 'Payment opened. Complete checkout to receive your rewards.';
+      // Do not show any browser alert after calling DoRequest successfully.
       return true;
     } catch (error) {
       const message = readablePaymentError(error);
@@ -4113,9 +4125,16 @@
         options,
         time: new Date().toISOString()
       };
+      window.__lastGalaxyPayStatus = {
+        state: 'error-after-call',
+        message,
+        options,
+        time: new Date().toISOString()
+      };
       console.error('[Galaxy Run Rivals] DoRequest failed:', error);
-      dom.checkoutStatus.textContent = `Payment failed: ${message}`;
-      window.alert(`Payment request failed: ${message}`);
+      // Do not show a browser popup here. Some payment SDKs may open/redirect and still throw a noisy sync error.
+      // Keep the message inside the checkout modal so a successful payment jump is not interrupted.
+      dom.checkoutStatus.textContent = `Payment did not open here. If a checkout page opened, please complete it there. Otherwise try again. (${message})`;
       return false;
     }
   }
@@ -4498,6 +4517,7 @@
       paymentScriptsReady,
       doRequestType: typeof window.DoRequest === 'function' ? 'window.DoRequest' : (typeof DoRequest === 'function' ? 'DoRequest' : typeof window.DoRequest),
       lastOptions: window.__lastGalaxyPayOptions || null,
+      lastStatus: window.__lastGalaxyPayStatus || null,
       lastError: window.__lastGalaxyPayError || null,
       currentScreen,
       selectedCheckout
