@@ -473,3 +473,25 @@ Verified flows:
 - Payment errors are shown inline in the checkout modal and stored in `window.__lastGalaxyPayError`.
 - The last payment call state is stored in `window.__lastGalaxyPayStatus`.
 - This prevents a confusing case where the payment page opens but the game still shows a browser failure prompt.
+
+
+## Item Use Reliability Fix
+
+- Fixed in-game item reliability by stopping the item dock from rebuilding DOM every animation frame.
+- Item dock now re-renders only when item stock, active timer, cooldown timer, run state, or revive state changes.
+- Added direct `touchend` handling for item buttons on mobile, with touch/click de-duplication.
+- Speed Boost button now supports free Sprint when no Speed Boost stock is available.
+- Item failure feedback is now explicit: no stock, cooling down, already active, revive already set, or not in run.
+- Using items now immediately refreshes HUD and item dock state.
+- Bomb now clears visible obstacles and grants a brief safety window.
+
+
+Item hotkeys:
+- 1 = Shield
+- 2 = Magnet
+- 3 = Double Coins
+- 4 = Bomb
+- 5 = Speed Boost / free Sprint
+- 6 = Revive
+- Space = Speed Boost / free Sprint
+- Debug: `window.__GalaxyItemHealth()` shows item stock, active timers, cooldowns, and dock state.

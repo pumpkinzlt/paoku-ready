@@ -3070,3 +3070,20 @@ button.tap-active {
     grid-template-columns: 1.2fr 1fr 1fr;
   }
 }
+
+
+/* Item Dock State Fixes */
+.item-btn.active {
+  box-shadow: 0 0 0 1px rgba(92, 255, 170, 0.55), 0 0 18px rgba(92, 255, 170, 0.18);
+}
+
+.item-btn.free-sprint .count {
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  background: rgba(92, 255, 170, 0.95);
+  color: #062319;
+}
+
+.item-btn.disabled.free-sprint {
+  opacity: 0.68;
+}

@@ -77,6 +77,15 @@
     }
   };
 
+  const ITEM_HOTKEYS = {
+    Digit1: 'shield',
+    Digit2: 'magnet',
+    Digit3: 'doubleCoins',
+    Digit4: 'bomb',
+    Digit5: 'speedBoost',
+    Digit6: 'revive'
+  };
+
   const UPGRADES = {
     engine: {
       name: 'Engine Core', icon: '🚀', max: 5, baseCost: 180,
@@ -273,6 +282,11 @@
   let lastProgressAt = 0;
   let firstStartWatchdog = 0;
   let loopErrorCount = 0;
+  let itemDockSignature = '';
+  let itemDockLastRenderAt = 0;
+  let itemTouchAt = 0;
+  let itemUseLastAt = 0;
+  let itemUseLastKey = '';
 
   const GALAXY_SECTORS = [
     {
@@ -1117,6 +1131,7 @@
     game.continueUsed = false;
     game.active = { shield: 0, magnet: 0, doubleCoins: 0, speedBoost: 0, bomb: 0 };
     game.cooldowns = { shield: 0, magnet: 0, doubleCoins: 0, bomb: 0, speedBoost: 0, sprint: 0 };
+    itemDockSignature = '';
     if (dom.pauseOverlay) dom.pauseOverlay.classList.add('hidden');
     if (dom.gameOverOverlay) dom.gameOverOverlay.classList.add('hidden');
     if (dom.continueCard) dom.continueCard.classList.add('hidden');
@@ -2226,71 +2241,129 @@
     if (game.active.doubleCoins > 0) addWave(coin.x, coin.y, '#ffd166');
   }
 
+
+  function itemStatusMessage(message, color = '#ffd166') {
+    if (!message) return;
+    try {
+      const p = game.player || { x: W / 2, y: H * 0.72 };
+      addFloatingText(p.x, p.y - 46, message, color);
+    } catch (error) {
+      console.warn('Item status skipped:', message);
+    }
+  }
+
+  function canUseFreeSprint() {
+    return game.running && !game.paused && !game.over && game.cooldowns.sprint <= 0 && game.active.speedBoost <= 0;
+  }
+
+  function itemCanUse(key) {
+    if (!ITEMS[key]) return { ok: false, reason: 'Unknown item' };
+    if (!game.running || game.paused || game.over) return { ok: false, reason: 'Not in run' };
+    if (key === 'speedBoost' && (data.ownedItems.speedBoost || 0) <= 0) {
+      if (canUseFreeSprint()) return { ok: true, freeSprint: true };
+      if (game.active.speedBoost > 0) return { ok: false, reason: 'Boost active' };
+      if (game.cooldowns.sprint > 0) return { ok: false, reason: 'Sprint cooling' };
+    }
+    if (key !== 'revive' && game.cooldowns[key] > 0) return { ok: false, reason: 'Cooling down' };
+    if (key !== 'bomb' && key !== 'revive' && game.active[key] > 0) return { ok: false, reason: 'Already active' };
+    if ((data.ownedItems[key] || 0) <= 0) return { ok: false, reason: 'No item stock' };
+    if (key === 'revive' && (game.reviveArmed || game.revivedThisRun)) return { ok: false, reason: 'Revive already set' };
+    return { ok: true };
+  }
+
+  function refreshItemDockSoon(force = false) {
+    renderItemDock(force);
+  }
+
   function useItem(key, options = {}) {
     const item = ITEMS[key];
-    if (!item || !game.running || game.paused || game.over) return false;
-    if (key !== 'revive' && game.cooldowns[key] > 0) return false;
-    if (key !== 'bomb' && key !== 'revive' && game.active[key] > 0) return false;
-    if ((data.ownedItems[key] || 0) <= 0) {
-      if (key === 'speedBoost' && options.allowFreeSprint) return useFreeSprint();
-      addFloatingText(game.player.x, game.player.y - 42, 'No item stock', '#ff5364');
+    if (!item) return false;
+
+    const status = itemCanUse(key);
+    if (!status.ok) {
+      if (key === 'speedBoost' && options.allowFreeSprint) {
+        const sprinted = useFreeSprint();
+        if (!sprinted && status.reason) itemStatusMessage(status.reason, '#ff5364');
+        return sprinted;
+      }
+      itemStatusMessage(status.reason, status.reason === 'No item stock' ? '#ff5364' : '#ffd166');
+      refreshItemDockSoon(true);
       return false;
     }
 
+    if (status.freeSprint || (key === 'speedBoost' && options.allowFreeSprint && (data.ownedItems.speedBoost || 0) <= 0)) {
+      return useFreeSprint();
+    }
+
     if (key === 'revive') {
-      if (game.reviveArmed || game.revivedThisRun) {
-        addFloatingText(game.player.x, game.player.y - 42, 'Revive already set', '#ffd166');
-        return false;
-      }
-      data.ownedItems.revive -= 1;
+      data.ownedItems.revive = Math.max(0, (data.ownedItems.revive || 0) - 1);
       game.reviveArmed = true;
-      addFloatingText(game.player.x, game.player.y - 42, 'Revive ready', '#5cffaa');
+      itemStatusMessage('Revive ready', '#5cffaa');
       audio.skill();
       saveData();
-      renderItemDock();
+      refreshItemDockSoon(true);
       return true;
     }
 
-    data.ownedItems[key] -= 1;
+    data.ownedItems[key] = Math.max(0, (data.ownedItems[key] || 0) - 1);
+
     if (key === 'shield') {
       game.active.shield = shieldDuration(item.duration);
       game.shieldHits = 1;
-    }
-    if (key === 'magnet') game.active.magnet = item.duration + upgradeLevel('magnetRange') * 0.35;
-    if (key === 'doubleCoins') game.active.doubleCoins = item.duration;
-    if (key === 'speedBoost') {
+    } else if (key === 'magnet') {
+      game.active.magnet = item.duration + upgradeLevel('magnetRange') * 0.35;
+    } else if (key === 'doubleCoins') {
+      game.active.doubleCoins = item.duration;
+    } else if (key === 'speedBoost') {
       game.active.speedBoost = boostDuration(item.duration);
       game.boostPulse = 1;
       game.speedFx = Math.max(game.speedFx || 1, boostPower());
-    }
-    if (key === 'bomb') {
+    } else if (key === 'bomb') {
       game.active.bomb = 0.2;
-      const cleared = game.obstacles.length;
+      const visible = game.obstacles.filter((o) => !o.dead && o.y > -120 && o.y < H + 90);
+      const cleared = visible.length || game.obstacles.filter((o) => !o.dead).length;
       game.obstacles.forEach((o) => {
-        o.dead = true;
-        addParticles(o.x, o.y, 14, '#ff4fd8', 230);
+        if (o.y > -220 && o.y < H + 160) {
+          o.dead = true;
+          addParticles(o.x, o.y, 14, '#ff4fd8', 230);
+        }
       });
       game.score += cleared * 36;
       game.shake = 10;
+      game.invincibleTimer = Math.max(game.invincibleTimer, 0.55);
     }
-    game.cooldowns[key] = item.cooldown;
+
+    game.cooldowns[key] = item.cooldown || 0;
     addWave(game.player.x, game.player.y, key === 'shield' ? '#38e8ff' : key === 'bomb' ? '#ff4fd8' : '#ffd166');
-    addFloatingText(game.player.x, game.player.y - 44, item.name, '#ffffff');
+    itemStatusMessage(item.name, '#ffffff');
     audio.skill();
     saveData();
-    renderItemDock();
+    updateHUD();
+    refreshItemDockSoon(true);
     return true;
   }
 
+
   function useFreeSprint() {
-    if (game.cooldowns.sprint > 0 || game.active.speedBoost > 0) return false;
+    if (!game.running || game.paused || game.over) return false;
+    if (game.active.speedBoost > 0) {
+      itemStatusMessage('Boost active', '#ffd166');
+      refreshItemDockSoon(true);
+      return false;
+    }
+    if (game.cooldowns.sprint > 0) {
+      itemStatusMessage('Sprint cooling', '#ffd166');
+      refreshItemDockSoon(true);
+      return false;
+    }
     game.active.speedBoost = boostDuration(2.1);
     game.cooldowns.sprint = 9;
     game.boostPulse = 1;
     game.speedFx = Math.max(game.speedFx || 1, boostPower());
     addWave(game.player.x, game.player.y, '#ffd166');
-    addFloatingText(game.player.x, game.player.y - 44, 'Sprint!', '#ffd166');
+    itemStatusMessage('Sprint!', '#ffd166');
     audio.skill();
+    refreshItemDockSoon(true);
     return true;
   }
 
@@ -2307,19 +2380,62 @@
     updateGoalCard();
   }
 
+  function itemDockKeyState(key) {
+    const item = ITEMS[key];
+    const count = data.ownedItems[key] || 0;
+    const cool = game.cooldowns[key] || 0;
+    const active = game.active[key] || 0;
+    const sprintCool = game.cooldowns.sprint || 0;
+    const canSprint = key === 'speedBoost' && count <= 0 && sprintCool <= 0 && active <= 0 && game.running && !game.paused && !game.over;
+    const disabled = key === 'speedBoost'
+      ? (!canSprint && count <= 0) || cool > 0 || active > 0 || sprintCool > 0
+      : count <= 0 || cool > 0 || active > 0 || (key === 'revive' && (game.reviveArmed || game.revivedThisRun));
+    const cooldownBase = key === 'speedBoost' && count <= 0 ? 9 : (item.cooldown || 1);
+    const displayCool = key === 'speedBoost' && count <= 0 ? sprintCool : cool;
+    const pct = displayCool > 0 ? clamp(displayCool / cooldownBase, 0, 1) * 100 : 0;
+    return { item, count, cool, active, sprintCool, canSprint, disabled, pct };
+  }
+
+  function buildItemDockSignature() {
+    const keys = ['shield', 'magnet', 'doubleCoins', 'bomb', 'speedBoost', 'revive'];
+    return keys.map((key) => {
+      const s = itemDockKeyState(key);
+      return [
+        key,
+        s.count,
+        Math.ceil((s.cool || 0) * 10) / 10,
+        Math.ceil((s.active || 0) * 10) / 10,
+        Math.ceil((s.sprintCool || 0) * 10) / 10,
+        s.disabled ? 1 : 0,
+        game.reviveArmed ? 1 : 0,
+        game.revivedThisRun ? 1 : 0,
+        game.running ? 1 : 0,
+        game.paused ? 1 : 0,
+        game.over ? 1 : 0
+      ].join(':');
+    }).join('|');
+  }
+
   function renderItemDock(force = true) {
+    if (!dom.itemDock) return;
     if (!force && currentScreen !== 'gameScreen') return;
+
+    const now = performance.now();
+    const signature = buildItemDockSignature();
+    if (!force && signature === itemDockSignature && now - itemDockLastRenderAt < 180) return;
+    itemDockSignature = signature;
+    itemDockLastRenderAt = now;
+
     const keys = ['shield', 'magnet', 'doubleCoins', 'bomb', 'speedBoost', 'revive'];
     dom.itemDock.innerHTML = keys.map((key) => {
-      const item = ITEMS[key];
-      const count = data.ownedItems[key] || 0;
-      const cool = game.cooldowns[key] || 0;
-      const active = game.active[key] || 0;
-      const disabled = count <= 0 || cool > 0 || active > 0 || (key === 'revive' && (game.reviveArmed || game.revivedThisRun));
-      const pct = cool > 0 ? clamp(cool / item.cooldown, 0, 1) * 100 : 0;
+      const s = itemDockKeyState(key);
+      const item = s.item;
+      const countText = key === 'speedBoost' && s.count <= 0 ? 'FREE' : s.count;
       const label = key === 'doubleCoins' ? '2X' : key === 'speedBoost' ? 'SPD' : item.name.split(' ')[0].slice(0, 3).toUpperCase();
-      return `<button class="item-btn item-${key} ${disabled ? 'disabled' : ''}" data-use-item="${key}" title="${item.name}">
-        <b>${item.icon}</b><small>${label}</small><span class="count">${count}</span><span class="cooldown-mask" style="height:${pct}%"></span>
+      const activeClass = s.active > 0 || (key === 'revive' && game.reviveArmed) ? 'active' : '';
+      const freeClass = s.canSprint ? 'free-sprint' : '';
+      return `<button class="item-btn item-${key} ${s.disabled ? 'disabled' : ''} ${activeClass} ${freeClass}" data-use-item="${key}" title="${item.name}" aria-label="${item.name}">
+        <b>${item.icon}</b><small>${label}</small><span class="count">${countText}</span><span class="cooldown-mask" style="height:${s.pct}%"></span>
       </button>`;
     }).join('');
   }
@@ -4233,6 +4349,24 @@
   }
 
   function setupEvents() {
+    function handleItemUseButton(useBtn, event) {
+      if (!useBtn) return false;
+      if (event && event.preventDefault) event.preventDefault();
+      if (event && event.stopPropagation) event.stopPropagation();
+
+      const now = performance.now();
+      const key = useBtn.dataset.useItem;
+      if (event && event.type === 'touchend') itemTouchAt = now;
+      if (event && event.type === 'click' && itemTouchAt && now - itemTouchAt < 700) return false;
+      if (itemUseLastKey === key && itemUseLastAt && now - itemUseLastAt < 180) return false;
+      itemUseLastKey = key;
+      itemUseLastAt = now;
+
+      const used = useItem(key, key === 'speedBoost' ? { allowFreeSprint: true } : {});
+      if (used && isMobileLayout()) setMobileItemsOpen(false);
+      return used;
+    }
+
     document.addEventListener('click', (event) => {
       if (event.target.closest('button')) audio.unlock();
     }, { passive: true });
@@ -4343,11 +4477,13 @@
         renderShop();
       }
       const useBtn = event.target.closest('[data-use-item]');
-      if (useBtn) {
-        const used = useItem(useBtn.dataset.useItem);
-        if (used && isMobileLayout()) setMobileItemsOpen(false);
-      }
+      if (useBtn) handleItemUseButton(useBtn, event);
     });
+
+    document.addEventListener('touchend', (event) => {
+      const useBtn = event.target.closest('[data-use-item]');
+      if (useBtn) handleItemUseButton(useBtn, event);
+    }, { passive: false });
 
     dom.pauseBtn.addEventListener('click', () => togglePause());
     dom.gameHomeBtn.addEventListener('click', () => { audio.click(); hardResetLaunchState(); clearTransientRunState(); showScreen('startScreen'); });
@@ -4416,6 +4552,7 @@
       game.keys[event.code] = true;
       if (currentScreen === 'gameScreen') {
         if (event.code === 'Space') useItem('speedBoost', { allowFreeSprint: true });
+        if (ITEM_HOTKEYS[event.code]) useItem(ITEM_HOTKEYS[event.code], ITEM_HOTKEYS[event.code] === 'speedBoost' ? { allowFreeSprint: true } : {});
         if (event.code === 'KeyP') togglePause();
         if (event.code === 'KeyR') restartGame();
       }
@@ -4510,6 +4647,22 @@
     }
   };
 
+
+  window.__GalaxyItemHealth = function () {
+    return {
+      currentScreen,
+      running: !!game.running,
+      paused: !!game.paused,
+      over: !!game.over,
+      ownedItems: Object.assign({}, data.ownedItems || {}),
+      active: Object.assign({}, game.active || {}),
+      cooldowns: Object.assign({}, game.cooldowns || {}),
+      reviveArmed: !!game.reviveArmed,
+      revivedThisRun: !!game.revivedThisRun,
+      itemDockSignature,
+      itemDockHtmlLength: dom.itemDock ? dom.itemDock.innerHTML.length : 0
+    };
+  };
 
   window.__GalaxyPaymentHealth = function () {
     return {
