@@ -582,3 +582,16 @@ Payment:
 - If that exact Promise wrapper error occurs, the game automatically falls back to `DoPay(options)` directly.
 - Promise results and URL-like SDK results are still handled.
 - Debug: `window.__GalaxyPaymentHealth()` now shows `lastSdkSource` and `lastFallback`.
+
+
+## Broken DoRequest Bypass Fix
+
+- The current PayApi-v2 `DoRequest(data)` wrapper contains `debugger` and calls `(DoPay(data))()`.
+- This can pause DevTools on PC and fail because `DoPay(data)` returns a Promise, not a callable function.
+- The game now detects this known broken wrapper before calling it.
+- When detected, the game bypasses `DoRequest` and calls `DoPay(options)` directly.
+- Debug: `window.__GalaxyPaymentHealth()` now shows:
+  - `brokenDoRequestDetected`
+  - `lastBypass`
+  - `lastSdkSource`
+  - `lastFallback`

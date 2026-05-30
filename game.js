@@ -4627,16 +4627,45 @@
     return handlePaymentSdkResult(result, options, 'DoPay-fallback');
   }
 
+  function inspectPaymentFunction(fn) {
+    try { return typeof fn === 'function' ? Function.prototype.toString.call(fn) : ''; }
+    catch (error) { return ''; }
+  }
+
+  function isKnownBrokenDoRequest() {
+    const request = typeof DoRequest === 'function' ? DoRequest : window.DoRequest;
+    const doPay = getDoPayFunction();
+    if (typeof request !== 'function' || !doPay) return false;
+    const code = inspectPaymentFunction(request);
+    return /debugger/.test(code) || /DoPay\s*\(\s*data\s*\)\s*\)\s*\(/.test(code) || /\(DoPay\(data\)\)\(\)/.test(code);
+  }
+
+  function shouldBypassDoRequestForCurrentSdk() {
+    // Screenshots show PayApi-v2 defines:
+    // function DoRequest(data) { debugger; return (DoPay(data))(); }
+    // That pauses DevTools and fails when DoPay returns Promise. Avoid calling it entirely.
+    return isKnownBrokenDoRequest();
+  }
+
   function callPaymentApi(options) {
     window.__lastGalaxyPayOptions = options;
     window.__lastGalaxyPayError = null;
     window.__lastGalaxyPayFallback = null;
+
+    // This payment SDK currently exposes a broken DoRequest wrapper that contains `debugger`
+    // and calls `(DoPay(data))()`. That pauses PC DevTools and breaks when DoPay returns Promise.
+    // If we detect that wrapper, bypass it and call the real SDK function DoPay(options) directly.
+    if (shouldBypassDoRequestForCurrentSdk()) {
+      console.warn('[Galaxy Run Rivals] Broken PayApi-v2 DoRequest detected; bypassing to DoPay(options).');
+      window.__lastGalaxyPayBypass = {
+        reason: 'broken-dorequest-wrapper',
+        time: new Date().toISOString()
+      };
+      return callDoPayFallback(options, new Error('Bypassed broken PayApi-v2 DoRequest wrapper'));
+    }
+
     console.log('[Galaxy Run Rivals] Calling DoRequest(options):', options);
 
-    // Primary path: follow the provided integration method.
-    // Fallback path: PayApi-v2 may implement DoRequest as `(DoPay(data))()`,
-    // but the current DoPay returns a Promise, not a function. In that case,
-    // call DoPay(options) directly without the extra ().
     try {
       const request = typeof DoRequest === 'function' ? DoRequest : window.DoRequest;
       if (typeof request !== 'function') return callDoPayFallback(options);
@@ -4705,7 +4734,7 @@
         options,
         time: new Date().toISOString()
       };
-      dom.checkoutStatus.textContent = 'Payment opened. Complete checkout to receive your rewards.';
+      dom.checkoutStatus.textContent = 'Payment request sent. If the checkout page does not open, check whether the payment provider account/config is active.';
       // Do not show any browser alert after calling DoRequest successfully.
       return true;
     } catch (error) {
@@ -5232,6 +5261,8 @@
       lastReturn: window.__lastGalaxyPayReturn || null,
       lastSdkSource: window.__lastGalaxyPaySdkSource || null,
       lastFallback: window.__lastGalaxyPayFallback || null,
+      lastBypass: window.__lastGalaxyPayBypass || null,
+      brokenDoRequestDetected: typeof isKnownBrokenDoRequest === 'function' ? isKnownBrokenDoRequest() : false,
       lastStatus: window.__lastGalaxyPayStatus || null,
       lastError: window.__lastGalaxyPayError || null,
       touchState: { checkoutPayTouchAt, checkoutPayLastAt, checkoutPayLastType, checkoutPayBusyUntil },
