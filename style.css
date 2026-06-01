@@ -3258,3 +3258,797 @@ button.tap-active {
     font-size: 0.92rem;
   }
 }
+
+
+/* Home Simplification Polish */
+.home-card {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.home-hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: start;
+}
+
+.home-subtitle {
+  max-width: 430px;
+  margin-top: 12px;
+}
+
+.home-status-pill {
+  min-width: 108px;
+  padding: 12px;
+  border-radius: 18px;
+  text-align: right;
+  border: 1px solid rgba(56, 232, 255, 0.24);
+  background: linear-gradient(180deg, rgba(56, 232, 255, 0.12), rgba(255,255,255,0.045));
+}
+
+.home-status-pill span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.home-status-pill strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--cyan);
+  font-size: 1rem;
+}
+
+.home-brief {
+  margin-top: 18px;
+  padding: 13px 15px;
+}
+
+.home-brief small {
+  line-height: 1.32;
+}
+
+.home-account {
+  margin-top: 12px;
+  padding: 10px 12px;
+}
+
+.home-pilot-row {
+  margin-top: 14px;
+}
+
+.home-pilot-row .input-label {
+  margin-bottom: 8px;
+}
+
+.home-primary-actions {
+  display: grid;
+  grid-template-columns: 1.35fr 0.95fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.home-start-btn {
+  min-height: 54px;
+  font-size: 1.02rem;
+}
+
+.home-secondary-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.home-secondary-actions .glass-btn {
+  min-height: 42px;
+  padding: 0 10px;
+  font-size: 0.92rem;
+}
+
+.home-info-strip {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.daily-card.compact {
+  margin-top: 0;
+  padding: 10px 11px;
+  border-radius: 16px;
+}
+
+.v2-promo-grid.compact {
+  margin-top: 0;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.v2-promo-grid.compact .v2-promo-card {
+  padding: 10px 11px;
+  border-radius: 16px;
+}
+
+.v2-promo-grid.compact .v2-promo-card strong {
+  font-size: 0.9rem;
+}
+
+.v2-promo-grid.compact .v2-promo-card small {
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.home-card .guest-note {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 820px), (max-height: 560px) {
+  .home-card {
+    width: min(500px, calc(100vw - 20px));
+    padding: 16px;
+    border-radius: 24px;
+  }
+
+  .home-hero {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .home-status-pill {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-width: 0;
+    text-align: left;
+    padding: 9px 11px;
+  }
+
+  .home-status-pill strong {
+    margin-top: 0;
+  }
+
+  .home-card h1 {
+    font-size: clamp(2.65rem, 13.5vw, 4.25rem);
+  }
+
+  .home-subtitle {
+    margin-top: 8px;
+    font-size: 0.94rem;
+    line-height: 1.42;
+  }
+
+  .home-brief {
+    margin-top: 12px;
+    padding: 10px 12px;
+  }
+
+  .home-brief small {
+    display: none;
+  }
+
+  .home-pilot-row {
+    margin-top: 12px;
+  }
+
+  .home-pilot-row .name-input {
+    min-height: 48px;
+  }
+
+  .home-primary-actions {
+    grid-template-columns: 1fr;
+    gap: 9px;
+    margin-top: 12px;
+  }
+
+  .home-start-btn {
+    min-height: 54px;
+  }
+
+  .home-secondary-actions {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .home-secondary-actions .glass-btn {
+    min-height: 40px;
+    padding: 0 6px;
+    font-size: 0.8rem;
+  }
+
+  .daily-card.compact {
+    padding: 9px 10px;
+  }
+
+  .v2-promo-grid.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .v2-promo-grid.compact .v2-promo-card {
+    padding: 9px 10px;
+  }
+
+  .v2-promo-grid.compact .v2-promo-card small {
+    display: none;
+  }
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+  .home-card {
+    width: min(760px, calc(100vw - 22px));
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+    padding: 14px;
+  }
+
+  .home-hero {
+    grid-template-columns: 1fr auto;
+  }
+
+  .home-card h1 {
+    font-size: clamp(2.2rem, 7vw, 3.4rem);
+  }
+
+  .home-subtitle,
+  .home-brief small,
+  .v2-promo-grid.compact .v2-promo-card small,
+  .home-card .guest-note {
+    display: none;
+  }
+
+  .home-brief,
+  .home-account,
+  .home-pilot-row,
+  .home-primary-actions,
+  .home-secondary-actions,
+  .home-info-strip {
+    margin-top: 8px;
+  }
+
+  .home-primary-actions {
+    grid-template-columns: 1.25fr 1fr;
+  }
+
+  .home-info-strip {
+    grid-template-columns: 1fr 1.5fr;
+    align-items: stretch;
+  }
+}
+
+
+/* Home Interaction Polish */
+#app {
+  transition: background 0.34s ease, filter 0.22s ease;
+}
+
+body.screen-start #app {
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 79, 216, 0.18), transparent 25%),
+    radial-gradient(circle at 82% 8%, rgba(56, 232, 255, 0.18), transparent 28%),
+    radial-gradient(circle at 50% 115%, rgba(255, 209, 102, 0.10), transparent 26%),
+    linear-gradient(145deg, #06101f 0%, #0a1730 55%, #100922 100%);
+}
+
+body.screen-subpage #app,
+body.screen-auth #app {
+  background:
+    radial-gradient(circle at 12% 12%, rgba(56, 232, 255, 0.12), transparent 24%),
+    radial-gradient(circle at 88% 10%, rgba(134, 107, 255, 0.18), transparent 28%),
+    linear-gradient(145deg, #050b17 0%, #08142a 58%, #070b1a 100%);
+}
+
+body.screen-game #app {
+  background:
+    radial-gradient(circle at 50% 8%, rgba(56, 232, 255, 0.12), transparent 32%),
+    linear-gradient(180deg, #06152c 0%, #060b19 100%);
+}
+
+body.home-return-pulse #app {
+  animation: homeReturnGlow 0.52s ease both;
+}
+
+@keyframes homeReturnGlow {
+  0% { filter: brightness(0.92) saturate(0.9); }
+  45% { filter: brightness(1.08) saturate(1.08); }
+  100% { filter: brightness(1) saturate(1); }
+}
+
+.screen.active {
+  animation: screenSoftEnter 0.18s ease both;
+}
+
+@keyframes screenSoftEnter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+body.screen-start .home-card {
+  border-color: rgba(56, 232, 255, 0.20);
+  box-shadow:
+    var(--shadow),
+    0 0 0 1px rgba(56,232,255,0.06),
+    inset 0 1px 0 rgba(255,255,255,0.09);
+}
+
+body.home-return-pulse .home-card {
+  animation: homeCardReturn 0.42s cubic-bezier(.2,.9,.2,1) both;
+}
+
+@keyframes homeCardReturn {
+  from { transform: translateY(8px) scale(0.985); opacity: 0.92; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.home-primary-actions button,
+.home-secondary-actions button {
+  position: relative;
+  overflow: hidden;
+}
+
+.home-primary-actions button.tap-active,
+.home-secondary-actions button.tap-active {
+  transform: translateY(1px) scale(0.985);
+  filter: brightness(1.06);
+}
+
+.home-secondary-actions .glass-btn.tap-active {
+  border-color: rgba(56, 232, 255, 0.28);
+  background: rgba(56, 232, 255, 0.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
+}
+
+.home-primary-actions .primary-btn.tap-active {
+  box-shadow:
+    0 8px 26px rgba(56, 232, 255, 0.26),
+    inset 0 1px 0 rgba(255,255,255,0.38);
+}
+
+@media (max-width: 820px), (max-height: 560px) {
+  .screen.active {
+    animation-duration: 0.14s;
+  }
+
+  body.home-return-pulse .home-card {
+    animation-duration: 0.32s;
+  }
+}
+
+
+/* Stronger Button Color Feedback */
+.home-primary-actions button,
+.home-secondary-actions button {
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease,
+    background 0.14s ease,
+    border-color 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.home-primary-actions button.tap-active,
+.home-primary-actions button.nav-color-flash,
+.home-primary-actions button.home-nav-selected {
+  background: linear-gradient(135deg, #76f3ff 0%, #9a82ff 52%, #ff70df 100%) !important;
+  color: #04111e !important;
+  border-color: rgba(255,255,255,0.58) !important;
+  box-shadow:
+    0 12px 34px rgba(56, 232, 255, 0.36),
+    0 0 26px rgba(255, 79, 216, 0.18),
+    inset 0 1px 0 rgba(255,255,255,0.55) !important;
+}
+
+.home-secondary-actions .glass-btn.tap-active,
+.home-secondary-actions .glass-btn.nav-color-flash,
+.home-secondary-actions .glass-btn.home-nav-selected,
+.home-primary-actions .glass-btn.tap-active,
+.home-primary-actions .glass-btn.nav-color-flash,
+.home-primary-actions .glass-btn.home-nav-selected {
+  background: linear-gradient(135deg, rgba(56,232,255,0.26), rgba(134,107,255,0.24)) !important;
+  border-color: rgba(56,232,255,0.62) !important;
+  color: #f6fbff !important;
+  box-shadow:
+    0 10px 28px rgba(56,232,255,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.22) !important;
+}
+
+.home-primary-actions button.nav-color-flash,
+.home-secondary-actions button.nav-color-flash {
+  animation: navButtonColorPop 0.38s ease both;
+}
+
+@keyframes navButtonColorPop {
+  0% { transform: translateY(1px) scale(0.982); filter: brightness(1.1) saturate(1.08); }
+  45% { transform: translateY(0) scale(1.012); filter: brightness(1.2) saturate(1.18); }
+  100% { transform: translateY(0) scale(1); filter: brightness(1) saturate(1); }
+}
+
+.home-primary-actions button.home-nav-selected::after,
+.home-secondary-actions button.home-nav-selected::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  width: 26px;
+  height: 3px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.72;
+}
+
+.home-primary-actions button.home-nav-selected,
+.home-secondary-actions button.home-nav-selected {
+  position: relative;
+}
+
+
+/* Global Button Press Color Feedback */
+.primary-btn.tap-active,
+.primary-btn:active,
+.buy-btn.tap-active,
+.buy-btn:active,
+.guest-play-btn.tap-active,
+.guest-play-btn:active {
+  background: linear-gradient(135deg, #76f3ff 0%, #9a82ff 52%, #ff70df 100%) !important;
+  color: #04111e !important;
+}
+
+.glass-btn.tap-active,
+.glass-btn:active,
+.tab-btn.tap-active,
+.tab-btn:active,
+.toggle-btn.tap-active,
+.toggle-btn:active,
+.icon-btn.tap-active,
+.icon-btn:active,
+.round-btn.tap-active,
+.round-btn:active,
+.equip-btn.tap-active,
+.equip-btn:active,
+.use-btn.tap-active,
+.use-btn:active {
+  background: linear-gradient(135deg, rgba(56,232,255,0.28), rgba(134,107,255,0.24)) !important;
+  border-color: rgba(56,232,255,0.58) !important;
+}
+
+.tiny-btn.tap-active,
+.tiny-btn:active {
+  background: rgba(255, 209, 102, 0.34) !important;
+  border-color: rgba(255, 209, 102, 0.48) !important;
+}
+
+
+/* Stable Button Press Feedback - no flash, no lingering selected state */
+.home-primary-actions button,
+.home-secondary-actions button,
+.primary-btn,
+.glass-btn,
+.buy-btn,
+.tab-btn,
+.toggle-btn,
+.icon-btn,
+.round-btn,
+.equip-btn,
+.use-btn,
+.tiny-btn {
+  transition:
+    transform 0.08s ease,
+    background-color 0.08s ease,
+    border-color 0.08s ease,
+    box-shadow 0.08s ease,
+    filter 0.08s ease !important;
+  animation: none !important;
+}
+
+.home-primary-actions button.nav-color-flash,
+.home-secondary-actions button.nav-color-flash,
+.home-primary-actions button.home-nav-selected,
+.home-secondary-actions button.home-nav-selected {
+  animation: none !important;
+}
+
+.home-primary-actions button.home-nav-selected::after,
+.home-secondary-actions button.home-nav-selected::after {
+  display: none !important;
+}
+
+.home-primary-actions .primary-btn.tap-active,
+.home-primary-actions .primary-btn:active,
+.primary-btn.tap-active,
+.primary-btn:active {
+  transform: translateY(1px) scale(0.99) !important;
+  background: linear-gradient(135deg, #54e8ff 0%, #7f70ff 58%, #f35fd2 100%) !important;
+  color: #04111e !important;
+  border-color: rgba(255,255,255,0.42) !important;
+  box-shadow:
+    0 8px 22px rgba(56,232,255,0.24),
+    inset 0 1px 0 rgba(255,255,255,0.45) !important;
+  filter: none !important;
+}
+
+.home-secondary-actions .glass-btn.tap-active,
+.home-secondary-actions .glass-btn:active,
+.home-primary-actions .glass-btn.tap-active,
+.home-primary-actions .glass-btn:active,
+.glass-btn.tap-active,
+.glass-btn:active {
+  transform: translateY(1px) scale(0.99) !important;
+  background: rgba(56,232,255,0.18) !important;
+  border-color: rgba(56,232,255,0.42) !important;
+  box-shadow:
+    0 6px 18px rgba(56,232,255,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.18) !important;
+  filter: none !important;
+}
+
+.tab-btn.tap-active,
+.tab-btn:active,
+.toggle-btn.tap-active,
+.toggle-btn:active,
+.icon-btn.tap-active,
+.icon-btn:active,
+.round-btn.tap-active,
+.round-btn:active,
+.buy-btn.tap-active,
+.buy-btn:active,
+.equip-btn.tap-active,
+.equip-btn:active,
+.use-btn.tap-active,
+.use-btn:active {
+  transform: translateY(1px) scale(0.99) !important;
+  background: rgba(56,232,255,0.18) !important;
+  border-color: rgba(56,232,255,0.42) !important;
+  filter: none !important;
+}
+
+.tiny-btn.tap-active,
+.tiny-btn:active {
+  transform: translateY(1px) scale(0.99) !important;
+  background: rgba(255,209,102,0.22) !important;
+  border-color: rgba(255,209,102,0.36) !important;
+  filter: none !important;
+}
+
+/* Remove the previous return-home flash effect. */
+body.home-return-pulse #app,
+body.home-return-pulse .home-card {
+  animation: none !important;
+  filter: none !important;
+}
+
+
+/* Home Action Buttons - stable, readable, no flash */
+.home-primary-actions {
+  grid-template-columns: 1.18fr 1fr;
+  gap: 12px;
+}
+
+.home-secondary-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.home-action-btn {
+  min-height: 58px;
+  display: grid !important;
+  grid-template-columns: 30px 1fr;
+  align-items: center;
+  justify-items: start;
+  gap: 10px;
+  text-align: left;
+  padding: 9px 14px !important;
+  border-radius: 18px !important;
+  line-height: 1.05;
+  position: relative;
+  overflow: hidden;
+  transform: translateY(0);
+  transition:
+    transform 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease !important;
+}
+
+.home-action-btn .action-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 900;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.11);
+}
+
+.home-action-btn .action-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.home-action-btn .action-text strong {
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.home-action-btn .action-text small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.home-action-btn.main-action {
+  background: linear-gradient(135deg, #45dfff 0%, #8f6bff 55%, #f84fcb 100%) !important;
+  color: #04101d !important;
+  border-color: rgba(255,255,255,0.36) !important;
+  box-shadow: 0 12px 30px rgba(56,232,255,0.20), inset 0 1px 0 rgba(255,255,255,0.38) !important;
+}
+
+.home-action-btn.main-action .action-icon {
+  background: rgba(4,16,29,0.13);
+  color: #04101d;
+  border-color: rgba(4,16,29,0.12);
+}
+
+.home-action-btn.main-action .action-text small {
+  color: rgba(4,16,29,0.62);
+}
+
+.home-primary-actions .glass-btn.home-action-btn,
+.home-secondary-actions .glass-btn.home-action-btn {
+  background: linear-gradient(180deg, rgba(255,255,255,0.085), rgba(255,255,255,0.042)) !important;
+  border: 1px solid rgba(158,183,224,0.25) !important;
+  color: #f6fbff !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07) !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .home-primary-actions .glass-btn.home-action-btn:hover,
+  .home-secondary-actions .glass-btn.home-action-btn:hover {
+    background: linear-gradient(180deg, rgba(56,232,255,0.13), rgba(255,255,255,0.055)) !important;
+    border-color: rgba(56,232,255,0.34) !important;
+    transform: translateY(-1px);
+  }
+
+  .home-action-btn.main-action:hover {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+  }
+}
+
+.home-action-btn.tap-active,
+.home-action-btn.home-action-pressed,
+.home-action-btn:active {
+  transform: translateY(1px) scale(0.992) !important;
+  animation: none !important;
+}
+
+.home-action-btn.main-action.tap-active,
+.home-action-btn.main-action.home-action-pressed,
+.home-action-btn.main-action:active {
+  background: linear-gradient(135deg, #2ecbe8 0%, #765ce6 58%, #d93db3 100%) !important;
+  box-shadow: 0 6px 18px rgba(56,232,255,0.16), inset 0 2px 10px rgba(4,16,29,0.16) !important;
+}
+
+.home-primary-actions .glass-btn.home-action-btn.tap-active,
+.home-primary-actions .glass-btn.home-action-btn.home-action-pressed,
+.home-primary-actions .glass-btn.home-action-btn:active,
+.home-secondary-actions .glass-btn.home-action-btn.tap-active,
+.home-secondary-actions .glass-btn.home-action-btn.home-action-pressed,
+.home-secondary-actions .glass-btn.home-action-btn:active {
+  background: linear-gradient(180deg, rgba(56,232,255,0.22), rgba(134,107,255,0.10)) !important;
+  border-color: rgba(56,232,255,0.46) !important;
+  box-shadow: 0 6px 18px rgba(56,232,255,0.12), inset 0 2px 8px rgba(0,0,0,0.12) !important;
+}
+
+.home-action-btn.nav-color-flash,
+.home-action-btn.home-nav-selected {
+  animation: none !important;
+}
+
+.home-action-btn.home-nav-selected::after {
+  display: none !important;
+}
+
+@media (max-width: 820px), (max-height: 560px) {
+  .home-primary-actions {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .home-secondary-actions {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .home-action-btn {
+    min-height: 52px;
+    grid-template-columns: 28px 1fr;
+    padding: 8px 12px !important;
+    border-radius: 16px !important;
+  }
+
+  .home-action-btn .action-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 11px;
+  }
+
+  .home-action-btn .action-text {
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+  }
+
+  .home-action-btn .action-text strong {
+    font-size: 0.9rem;
+  }
+
+  .home-action-btn .action-text small {
+    font-size: 0.65rem;
+  }
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+  .home-secondary-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home-action-btn {
+    min-height: 46px;
+    padding: 7px 10px !important;
+  }
+
+  .home-action-btn .action-text small {
+    display: none;
+  }
+}
+
+
+/* Unified Clicked Button State - one rule for all clickable buttons */
+button.button-clicked {
+  background: linear-gradient(135deg, rgba(56,232,255,0.30), rgba(134,107,255,0.24)) !important;
+  border-color: rgba(56,232,255,0.62) !important;
+  box-shadow:
+    0 8px 22px rgba(56,232,255,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.22) !important;
+  color: #f7fcff !important;
+  filter: none !important;
+}
+
+.primary-btn.button-clicked,
+.home-action-btn.main-action.button-clicked {
+  background: linear-gradient(135deg, #30d3f3 0%, #7a62eb 58%, #df43b9 100%) !important;
+  color: #04101d !important;
+  border-color: rgba(255,255,255,0.50) !important;
+  box-shadow:
+    0 10px 26px rgba(56,232,255,0.24),
+    inset 0 1px 0 rgba(255,255,255,0.44) !important;
+}
+
+.tiny-btn.button-clicked {
+  background: rgba(255,209,102,0.30) !important;
+  border-color: rgba(255,209,102,0.52) !important;
+  color: #fff7da !important;
+}
+
+button:not(.button-clicked).nav-color-flash,
+button:not(.button-clicked).home-action-pressed,
+button:not(.button-clicked).home-nav-selected {
+  animation: none !important;
+}
+
+button.button-clicked::after {
+  display: none !important;
+}
+
+/* Press is separate from clicked: small physical movement only. */
+button.tap-active {
+  transform: translateY(1px) scale(0.992) !important;
+}

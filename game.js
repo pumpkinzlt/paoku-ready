@@ -673,6 +673,15 @@
     setAuthMessage('');
   }
 
+  function setHomeActionButtonLabel(button, title, subtitle = '') {
+    if (!button) return;
+    const titleEl = button.querySelector('.action-text strong');
+    const subEl = button.querySelector('.action-text small');
+    if (titleEl) titleEl.textContent = title;
+    else button.textContent = title;
+    if (subEl) subEl.textContent = subtitle;
+  }
+
   function refreshAccountLabel() {
     if (!dom.currentAccountName) return;
     const account = accounts[currentUserId];
@@ -680,18 +689,18 @@
       if (dom.accountPrefix) dom.accountPrefix.textContent = 'Signed in as';
       dom.currentAccountName.textContent = account.displayName;
       dom.logoutBtn.textContent = 'Sign Out';
-      dom.startBtn.textContent = 'Start Game';
-      dom.modeBtn.textContent = 'Mode Select';
-      dom.shopBtn.textContent = 'Shop';
-      dom.leaderboardBtn.textContent = 'Leaderboard';
+      setHomeActionButtonLabel(dom.startBtn, 'Start Game', 'Play now');
+      setHomeActionButtonLabel(dom.modeBtn, 'Mode Select', 'Choose run');
+      setHomeActionButtonLabel(dom.shopBtn, 'Shop', 'Coins & gear');
+      setHomeActionButtonLabel(dom.leaderboardBtn, 'Leaderboard', 'Top pilots');
     } else {
       if (dom.accountPrefix) dom.accountPrefix.textContent = 'Guest Mode';
       dom.currentAccountName.textContent = 'Rookie Runner';
       dom.logoutBtn.textContent = 'Login / Register';
-      dom.startBtn.textContent = 'Play Rookie Mode';
-      dom.modeBtn.textContent = 'Full Modes';
-      dom.shopBtn.textContent = 'Shop Locked';
-      dom.leaderboardBtn.textContent = 'Rankings Locked';
+      setHomeActionButtonLabel(dom.startBtn, 'Play Rookie Mode', 'Guest run');
+      setHomeActionButtonLabel(dom.modeBtn, 'Full Modes', 'Login unlock');
+      setHomeActionButtonLabel(dom.shopBtn, 'Shop Locked', 'Login unlock');
+      setHomeActionButtonLabel(dom.leaderboardBtn, 'Rankings Locked', 'Login unlock');
     }
   }
 
@@ -1146,8 +1155,67 @@
     }
   };
 
+  function clearButtonFeedback() {
+    $$('button.tap-active').forEach((button) => button.classList.remove('tap-active'));
+    $$('button.button-clicked').forEach((button) => {
+      button.classList.remove('button-clicked');
+      button.removeAttribute('aria-pressed');
+    });
+    $$('button.home-action-pressed').forEach((button) => button.classList.remove('home-action-pressed'));
+    $$('button.nav-color-flash').forEach((button) => button.classList.remove('nav-color-flash'));
+    $$('.home-nav-selected').forEach((button) => {
+      button.classList.remove('home-nav-selected');
+      button.removeAttribute('aria-current');
+    });
+    $$('.tap-ripple').forEach((ripple) => ripple.remove());
+  }
+
+  function clearClickedButtons() {
+    $$('button.button-clicked').forEach((button) => {
+      button.classList.remove('button-clicked');
+      button.removeAttribute('aria-pressed');
+    });
+  }
+
+  function markClickedButton(button) {
+    if (!button || button.disabled || button.classList.contains('disabled')) return;
+    clearClickedButtons();
+    button.classList.add('button-clicked');
+    button.setAttribute('aria-pressed', 'true');
+  }
+
+  function setHomeNavSelectedForScreen() {
+    // Old selected/flash states are intentionally disabled. Use only .button-clicked for click feedback.
+    $$('.home-nav-selected').forEach((button) => {
+      button.classList.remove('home-nav-selected');
+      button.removeAttribute('aria-current');
+    });
+    $$('button.nav-color-flash').forEach((button) => button.classList.remove('nav-color-flash'));
+    $$('button.home-action-pressed').forEach((button) => button.classList.remove('home-action-pressed'));
+  }
+
+  function setScreenMood(id) {
+    const classes = ['screen-start', 'screen-subpage', 'screen-game', 'screen-auth', 'home-return-pulse'];
+    document.body.classList.remove(...classes);
+
+    if (id === 'startScreen') {
+      document.body.classList.add('screen-start');
+    } else if (id === 'gameScreen') {
+      document.body.classList.add('screen-game');
+    } else if (id === 'authScreen') {
+      document.body.classList.add('screen-auth');
+    } else {
+      document.body.classList.add('screen-subpage');
+    }
+  }
+
   function showScreen(id) {
     if (!dom.screens.some((screen) => screen.id === id)) id = 'startScreen';
+    $$('button.tap-active').forEach((button) => button.classList.remove('tap-active'));
+    $$('.tap-ripple').forEach((ripple) => ripple.remove());
+    if (id === 'startScreen' || id === 'gameScreen') clearButtonFeedback();
+    setHomeNavSelectedForScreen();
+    setScreenMood(id);
     currentScreen = id;
     if (id !== 'gameScreen') {
       audio.setEngine(false);
@@ -1751,6 +1819,7 @@
     if (shouldIgnoreRapidAction('lastStartClickAt', 220)) return;
 
     try { audio.click(); } catch (error) {}
+    hardResetLaunchState();
     startGame('classic', 1, { force: true });
   }
 
@@ -4907,13 +4976,19 @@
 
 
     document.addEventListener('click', (event) => {
-      if (event.target.closest('button')) audio.unlock();
-    }, { passive: true });
+      const button = event.target.closest('button');
+      if (!button) return;
+      audio.unlock();
+      markClickedButton(button);
+    }, { passive: true, capture: true });
 
     function addButtonFeedback(button, event) {
       if (!button || button.disabled || button.classList.contains('disabled')) return;
+      $$('button.tap-active').forEach((btn) => btn.classList.remove('tap-active'));
       button.classList.add('tap-active');
-      setTimeout(() => button.classList.remove('tap-active'), 180);
+
+      const isHomeNav = Boolean(button.closest('.home-primary-actions') || button.closest('.home-secondary-actions'));
+      if (isHomeNav) return;
 
       const rect = button.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
@@ -4925,7 +5000,7 @@
       ripple.style.left = `${(event.clientX || rect.left + rect.width / 2) - rect.left - size / 2}px`;
       ripple.style.top = `${(event.clientY || rect.top + rect.height / 2) - rect.top - size / 2}px`;
       button.appendChild(ripple);
-      setTimeout(() => ripple.remove(), 520);
+      setTimeout(() => ripple.remove(), 420);
     }
 
     document.addEventListener('pointerdown', (event) => {
@@ -4939,13 +5014,13 @@
       warmPaymentScriptsFromGesture('touchstart');
     }, { passive: true });
 
-    document.addEventListener('pointerup', (event) => {
-      const button = event.target.closest('button');
-      if (button) button.classList.remove('tap-active');
+    document.addEventListener('pointerup', () => {
+      $$('button.tap-active').forEach((button) => button.classList.remove('tap-active'));
+      $$('.tap-ripple').forEach((ripple) => ripple.remove());
     }, { passive: true });
 
     document.addEventListener('pointercancel', () => {
-      $$('button.tap-active').forEach((button) => button.classList.remove('tap-active'));
+      clearButtonFeedback();
     }, { passive: true });
 
     dom.authTabs.forEach((button) => {
@@ -5173,6 +5248,7 @@
       resizeCanvas();
       setupEvents();
       ensureGameOverActions();
+      setScreenMood(currentScreen || 'startScreen', '');
       if (!hasActiveAccount()) {
         currentUserId = '';
         try { localStorage.removeItem(SESSION_KEY); } catch (error) {}
@@ -5195,6 +5271,7 @@
         resizeCanvas();
         setupEvents();
         ensureGameOverActions();
+        setScreenMood(currentScreen || 'startScreen', '');
         syncLoadedDataToUI();
         handlePaymentReturn();
         game.resetRuntime();
@@ -5231,6 +5308,26 @@
     }
   };
 
+
+  window.__GalaxyHomeInteractionHealth = function () {
+    return {
+      currentScreen,
+      bodyClasses: document.body.className || '',
+      activeScreen: document.querySelector('.screen.active')?.id || null,
+      tapActiveCount: $$('button.tap-active').length,
+      buttonClickedCount: $$('button.button-clicked').length,
+      clickedButtonText: $$('button.button-clicked').map((button) => button.textContent.trim().replace(/\s+/g, ' ')).join(' | '),
+      homeActionPressedCount: $$('button.home-action-pressed').length,
+      navColorFlashCount: $$('button.nav-color-flash').length,
+      homeNavSelectedCount: $$('.home-nav-selected').length,
+      selectedNavText: $$('.home-nav-selected').map((button) => button.textContent.trim()).join(' | '),
+      rippleCount: $$('.tap-ripple').length,
+      homeReturnPulse: document.body.classList.contains('home-return-pulse'),
+      screenStart: document.body.classList.contains('screen-start'),
+      screenSubpage: document.body.classList.contains('screen-subpage'),
+      screenGame: document.body.classList.contains('screen-game')
+    };
+  };
 
   window.__GalaxyMobileUIHealth = function () {
     const actions = dom.gameOverOverlay ? dom.gameOverOverlay.querySelector('.gameover-actions') : null;
@@ -5336,6 +5433,7 @@
       runId: game.runId,
       launchLockUntil: game.launchLockUntil || 0,
       hasStartButton: !!document.querySelector('#startBtn'),
+      startButtonInlineOnclick: !!(document.querySelector('#startBtn') && document.querySelector('#startBtn').getAttribute('onclick')),
       hasGameCanvas: !!document.querySelector('#gameCanvas'),
       gameOverHidden: dom.gameOverOverlay ? dom.gameOverOverlay.classList.contains('hidden') : null,
       pauseHidden: dom.pauseOverlay ? dom.pauseOverlay.classList.contains('hidden') : null,

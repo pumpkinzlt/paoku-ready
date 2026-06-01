@@ -603,3 +603,69 @@ Payment:
 - Game Over modal now explicitly ensures both Restart and Home buttons exist and are visible.
 - Mobile Game Over layout is more compact and scrollable, with sticky bottom actions.
 - Added `window.__GalaxyMobileUIHealth()` for checking onboarding and Game Over button visibility.
+
+
+## Home Simplification Polish
+
+- Simplified the start screen so Start Game, Mode Select, and Shop are easier to notice.
+- Kept all functional entry points visible: Start, Mode, Shop, Leaderboard, Settings, Login/Register, Daily Reward, Starter Deal, and Next Goal.
+- Shortened the mission copy and made Daily Reward / Starter Deal / Next Goal compact.
+- Improved mobile and landscape start screen density without hiding important features.
+
+
+## Home Interaction Polish
+
+- Added explicit screen mood classes for Start, subpages, auth, and game screens.
+- Returning Home now clears all tap/ripple states and gives a subtle home-return glow.
+- Home navigation buttons use a cleaner short press effect without persistent ripples.
+- Subpage and Home backgrounds now have slightly different tones so navigation state feels clearer.
+- Added `window.__GalaxyHomeInteractionHealth()` for checking active screen, body classes, tap state, and transition state.
+
+
+## Stronger Button Color Feedback
+
+- Home buttons now show a clear background-color change on press, not just scale/brightness.
+- Home navigation buttons get a short `nav-color-flash` state when clicked.
+- The corresponding home navigation entry gets a temporary selected state while navigating to its screen.
+- Returning to Home clears selected/tap/ripple states.
+- Debug health now includes `navColorFlashCount`, `homeNavSelectedCount`, and `selectedNavText`.
+
+
+## Global Button Press Color Feedback
+
+- Common buttons now visibly change background color while pressed, including primary, glass, tab, toggle, icon, buy, equip, use, and tiny buttons.
+- Home buttons still receive the stronger navigation color flash.
+
+
+## Stable Button Press Feedback
+
+- Removed the previous button flash animation and lingering selected state.
+- Button feedback is now press-only: background changes while pressing, then returns cleanly.
+- Removed the strong home-return pulse to avoid the feeling of a screen flash.
+- Home navigation buttons no longer keep selected background after opening subpages.
+
+
+## Home Action Button Interaction Fix
+
+- Reworked the Start / Mode / Shop / Leaderboard / Settings button group as a stable home action area.
+- Added small icons and secondary labels so the actions are easier to understand without hiding anything.
+- Press feedback now uses a stable darker pressed background, not a flash animation.
+- No lingering selected state remains after navigation.
+- Added `homeActionPressedCount` to `window.__GalaxyHomeInteractionHealth()`.
+
+
+## Unified Clicked Button State
+
+- Simplified the button interaction to one rule: clicking a button applies `.button-clicked` to that button only.
+- Every new button click clears the previous clicked button.
+- Non-clicked buttons keep only their default style.
+- Removed conflicting behavior from home pressed/selected/flash states.
+- Debug health now includes `buttonClickedCount` and `clickedButtonText`.
+
+
+## Start Button Double Trigger Fix
+
+- Removed inline `onclick` handlers from Start Game and Start Selected Mode.
+- Start now relies on the explicit JS event listeners only, preventing double-start from inline onclick + addEventListener.
+- Account label refresh now updates the button title/subtitle without destroying the home action button structure.
+- `window.__GalaxyStartHealth()` now reports whether the Start button still has an inline onclick.

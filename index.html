@@ -46,45 +46,67 @@
     </section>
 
     <section id="startScreen" class="screen active menu-screen">
-      <div class="brand-card pop-in">
-        <div class="eyebrow">Deep Space Runner</div>
-        <h1>Galaxy Run Rivals</h1>
-        <p class="subtitle">Pilot through nebula highways, dodge asteroid debris, collect Star Coins, and outrun rival ships across the Orion Rift.</p>
-        <div class="story-card">
-          <span>Mission Brief</span>
-          <strong>The Orion Rift is collapsing.</strong>
-          <small>Jump from star gate to star gate, gather energy cores, and keep your ship alive long enough to reach the next galaxy sector.</small>
+      <div class="brand-card home-card pop-in">
+        <div class="home-hero">
+          <div>
+            <div class="eyebrow">Deep Space Runner</div>
+            <h1>Galaxy Run Rivals</h1>
+            <p class="subtitle home-subtitle">Dodge asteroids, collect Star Coins, and escape the Orion Rift.</p>
+          </div>
+          <div class="home-status-pill">
+            <span>Rookie Lane</span>
+            <strong>Ready</strong>
+          </div>
         </div>
-        <div class="account-bar" id="accountBar">
+
+        <div class="story-card home-brief">
+          <span>Mission</span>
+          <strong>The Orion Rift is collapsing.</strong>
+          <small>Fly fast, dodge clean, collect energy, and reach the next galaxy sector.</small>
+        </div>
+
+        <div class="account-bar home-account" id="accountBar">
           <span><span id="accountPrefix">Signed in as</span> <strong id="currentAccountName">Player</strong></span>
           <button class="tiny-btn" id="logoutBtn">Sign Out</button>
         </div>
-        <label class="input-label" for="playerNameInput">Pilot Name</label>
-        <input id="playerNameInput" class="name-input" maxlength="18" autocomplete="off" placeholder="Enter your name" />
-        <div class="menu-grid">
-          <button class="primary-btn" id="startBtn" onclick="window.__GRRForceStart && window.__GRRForceStart()">Start Game</button>
-          <button class="glass-btn" id="modeBtn">Mode Select</button>
-          <button class="glass-btn" id="shopBtn">Shop</button>
-          <button class="glass-btn" id="leaderboardBtn">Leaderboard</button>
-          <button class="glass-btn" id="settingsBtn">Settings</button>
+
+        <div class="home-pilot-row">
+          <label class="input-label" for="playerNameInput">Pilot Name</label>
+          <input id="playerNameInput" class="name-input" maxlength="18" autocomplete="off" placeholder="Enter your name" />
         </div>
-        <div class="daily-card" id="dailyRewardCard">
-          <span>Daily Reward</span>
-          <strong id="dailyRewardText">Ready</strong>
-          <button class="tiny-btn" id="claimDailyBtn">Claim</button>
+
+        <div class="home-primary-actions">
+          <button class="primary-btn home-start-btn home-action-btn main-action" id="startBtn"><span class="action-icon">▶</span><span class="action-text"><strong>Start Game</strong><small>Play now</small></span></button>
+          <button class="glass-btn home-action-btn" id="modeBtn"><span class="action-icon">▦</span><span class="action-text"><strong>Mode Select</strong><small>Choose run</small></span></button>
         </div>
-        <div class="v2-promo-grid">
-          <div class="v2-promo-card premium">
-            <span>Best Starter Deal</span>
-            <strong>Star Pilot Bundle</strong>
-            <small>Bonus ship + Revive + Shield + 300 Star Coins</small>
+
+        <div class="home-secondary-actions">
+          <button class="glass-btn home-action-btn" id="shopBtn"><span class="action-icon">◆</span><span class="action-text"><strong>Shop</strong><small>Coins & gear</small></span></button>
+          <button class="glass-btn home-action-btn" id="leaderboardBtn"><span class="action-icon">★</span><span class="action-text"><strong>Leaderboard</strong><small>Top pilots</small></span></button>
+          <button class="glass-btn home-action-btn" id="settingsBtn"><span class="action-icon">⚙</span><span class="action-text"><strong>Settings</strong><small>Audio & play</small></span></button>
+        </div>
+
+        <div class="home-info-strip">
+          <div class="daily-card compact" id="dailyRewardCard">
+            <span>Daily</span>
+            <strong id="dailyRewardText">Ready</strong>
+            <button class="tiny-btn" id="claimDailyBtn">Claim</button>
           </div>
-          <div class="v2-promo-card">
-            <span>Next Goal</span>
-            <strong id="nextGoalText">Score 1,500</strong>
-            <small id="nextGoalReward">Reward: 120 Coins + 1 Boost</small>
+
+          <div class="v2-promo-grid compact">
+            <div class="v2-promo-card premium">
+              <span>Starter Deal</span>
+              <strong>Star Pilot Bundle</strong>
+              <small>Ship + Revive + Shield + 300 Coins</small>
+            </div>
+            <div class="v2-promo-card">
+              <span>Next Goal</span>
+              <strong id="nextGoalText">Score 1,500</strong>
+              <small id="nextGoalReward">Reward: 120 Coins + 1 Boost</small>
+            </div>
           </div>
         </div>
+
         <p class="guest-note hidden" id="guestModeNote">Guest Rookie Mode is available without login. Create an account to unlock Shop, Arena, Level Mode, daily rewards, and official local rankings.</p>
       </div>
     </section>
@@ -116,7 +138,7 @@
           </button>
         </div>
         <div id="levelSelect" class="level-select hidden"></div>
-        <button class="primary-btn full" id="startSelectedModeBtn" onclick="window.__GRRForceModeStart && window.__GRRForceModeStart()">Start Selected Mode</button>
+        <button class="primary-btn full" id="startSelectedModeBtn">Start Selected Mode</button>
       </div>
     </section>
 
